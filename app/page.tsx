@@ -52,7 +52,7 @@ type Product = {
   since?: string;
   isNew: boolean;
   notes?: string;
-  sellingPoints?: string[]; // optional
+  sellingPoints?: string[];
 };
 
 const LATEST_PRODUCTS: Product[] = [
@@ -64,7 +64,7 @@ const LATEST_PRODUCTS: Product[] = [
     since: "2024+",
     isNew: true,
     notes: "Aircraft/config dependent",
-    sellingPoints: ["Newest Lufthansa long-haul J", "Strong privacy and comfort", "Great ‘new product’ selling angle"],
+    sellingPoints: ["Newest Lufthansa long-haul J", "Strong privacy + comfort", "Great ‘new product’ selling point"],
   },
   {
     airline: "NH",
@@ -121,9 +121,7 @@ function buildQuery({ airline, route, aircraft, cabin }: { airline: string; rout
 function findLatestProduct(airline: string, cabin: Cabin, aircraft: string) {
   const a = normalizeAirline(airline);
   const ac = normalizeAircraft(aircraft);
-  const exact = LATEST_PRODUCTS.find(
-    (p) => p.airline === a && p.cabin === cabin && p.aircraft && normalizeAircraft(p.aircraft) === ac
-  );
+  const exact = LATEST_PRODUCTS.find((p) => p.airline === a && p.cabin === cabin && p.aircraft && normalizeAircraft(p.aircraft) === ac);
   if (exact) return exact;
   return LATEST_PRODUCTS.find((p) => p.airline === a && p.cabin === cabin && !p.aircraft) ?? null;
 }
@@ -133,28 +131,21 @@ function prettyAirline(code: string) {
 }
 
 /* ===========================
-   ICONS (NO LIBS NEEDED)
+   ICONS (NO LIBS)
    =========================== */
 
 function Icon({ children }: { children: React.ReactNode }) {
   return <span style={{ display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>{children}</span>;
 }
-
 function PlaneIcon() {
   return (
     <Icon>
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-        <path
-          d="M2 16l20-6-20-6 4 6 7 0-7 0-4 6z"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
+        <path d="M2 16l20-6-20-6 4 6h7H6l-4 6z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
       </svg>
     </Icon>
   );
 }
-
 function MapIcon() {
   return (
     <Icon>
@@ -165,7 +156,6 @@ function MapIcon() {
     </Icon>
   );
 }
-
 function SeatIcon() {
   return (
     <Icon>
@@ -177,7 +167,6 @@ function SeatIcon() {
     </Icon>
   );
 }
-
 function SparkIcon() {
   return (
     <Icon>
@@ -194,17 +183,24 @@ function SparkIcon() {
    =========================== */
 
 export default function Page() {
-  const [airline, setAirline] = useState("LH");
-  const [route, setRoute] = useState("JFK-LHR");
-  const [aircraft, setAircraft] = useState("A350-900");
+  // ✅ BLANK BY DEFAULT
+  const [airline, setAirline] = useState("");
+  const [route, setRoute] = useState("");
+  const [aircraft, setAircraft] = useState("");
   const [cabin, setCabin] = useState<Cabin>("Business");
+
   const [compare, setCompare] = useState<string[]>(["AA", "BA"]);
 
   const airlineKey = useMemo(() => normalizeAirline(airline), [airline]);
   const routeKey = useMemo(() => normalizeRoute(route), [route]);
   const aircraftKey = useMemo(() => normalizeAircraft(aircraft), [aircraft]);
 
-  const suggestedAircraft = useMemo(() => ROUTE_AIRCRAFT[routeKey]?.[airlineKey] ?? [], [routeKey, airlineKey]);
+  const hasRequired = airlineKey.length > 0 && routeKey.length > 0 && aircraftKey.length > 0;
+
+  const suggestedAircraft = useMemo(() => {
+    if (!routeKey || !airlineKey) return [];
+    return ROUTE_AIRCRAFT[routeKey]?.[airlineKey] ?? [];
+  }, [routeKey, airlineKey]);
 
   const query = useMemo(() => buildQuery({ airline: airlineKey, route: routeKey, aircraft: aircraftKey, cabin }), [
     airlineKey,
@@ -221,7 +217,10 @@ export default function Page() {
 
   const image = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${airlineKey} ${aircraftKey} ${cabin} seat`)}`;
 
-  const product = useMemo(() => findLatestProduct(airlineKey, cabin, aircraftKey), [airlineKey, cabin, aircraftKey]);
+  const product = useMemo(() => {
+    if (!hasRequired) return null;
+    return findLatestProduct(airlineKey, cabin, aircraftKey);
+  }, [airlineKey, cabin, aircraftKey, hasRequired]);
 
   const compareCards = useMemo(() => {
     return compare.map((code) => {
@@ -234,14 +233,12 @@ export default function Page() {
       return {
         airline: a,
         seatmaps: smDirect ?? `https://seatmaps.com/search/?q=${q}`,
-        seatmapsMode: smDirect ? "Direct" : "Search",
         aerolopa: alDirect ?? `https://www.aerolopa.com/search?query=${q}`,
-        aerolopaMode: alDirect ? "Direct" : "Search",
         image: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey} ${cabin} seat`)}`,
-        product: findLatestProduct(a, cabin, aircraftKey),
+        product: hasRequired ? findLatestProduct(a, cabin, aircraftKey) : null,
       };
     });
-  }, [compare, routeKey, cabin, aircraftKey]);
+  }, [compare, routeKey, cabin, aircraftKey, hasRequired]);
 
   function toggleCompare(code: string) {
     setCompare((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]));
@@ -249,34 +246,33 @@ export default function Page() {
 
   return (
     <main style={styles.page}>
-      {/* Header */}
       <div style={styles.header}>
         <div style={styles.brand}>
           <img src="/ascend-logo.png" alt="Ascend" style={styles.logo} />
           <div>
             <h1 style={styles.h1}>Ascend Seat Image & Map Project</h1>
-            <div style={styles.sub}>Enter route + aircraft to highlight seat map + images + “new product” selling points.</div>
+            <div style={styles.sub}>Enter airline + route + aircraft to open seat plans, maps and images — plus “new product” selling points.</div>
           </div>
         </div>
-        <div style={styles.rightPill}>Manual now · AI-ready later</div>
+        <div style={styles.rightPill}>No AI · Manual data</div>
       </div>
 
       <div style={styles.layout}>
-        {/* Left: Search */}
+        {/* Search */}
         <section style={styles.card}>
           <div style={styles.cardTitle}>Search</div>
 
           <div style={styles.grid}>
             <Field label="Airline (IATA)">
-              <input value={airline} onChange={(e) => setAirline(e.target.value)} style={styles.input} placeholder="LH" />
+              <input value={airline} onChange={(e) => setAirline(e.target.value)} style={styles.input} placeholder="e.g. LH" />
             </Field>
 
             <Field label="Route (AAA-BBB)">
-              <input value={route} onChange={(e) => setRoute(e.target.value)} style={styles.input} placeholder="JFK-LHR" />
+              <input value={route} onChange={(e) => setRoute(e.target.value)} style={styles.input} placeholder="e.g. JFK-LHR" />
             </Field>
 
             <Field label="Aircraft">
-              <input value={aircraft} onChange={(e) => setAircraft(e.target.value)} style={styles.input} placeholder="A350-900" />
+              <input value={aircraft} onChange={(e) => setAircraft(e.target.value)} style={styles.input} placeholder="e.g. A350-900" />
             </Field>
 
             <Field label="Cabin">
@@ -289,7 +285,6 @@ export default function Page() {
             </Field>
           </div>
 
-          {/* Suggestions */}
           {suggestedAircraft.length > 0 && (
             <div style={styles.tipBox}>
               <div style={styles.tipTitle}>
@@ -306,28 +301,28 @@ export default function Page() {
             </div>
           )}
 
-          {/* Action Buttons */}
           <div style={styles.actions}>
             <a href={aerolopa} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnPrimary }}>
+              <button style={{ ...styles.btn, ...styles.btnPrimary }} disabled={!hasRequired}>
                 <PlaneIcon /> AeroLOPA Seat Plan <span style={styles.muted}>({directAerolopa ? "Direct" : "Search"})</span>
               </button>
             </a>
 
             <a href={seatmaps} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnSecondary }}>
+              <button style={{ ...styles.btn, ...styles.btnSecondary }} disabled={!hasRequired}>
                 <MapIcon /> SeatMaps <span style={styles.muted}>({directSeatmaps ? "Direct" : "Search"})</span>
               </button>
             </a>
 
             <a href={image} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnGhost }}>
+              <button style={{ ...styles.btn, ...styles.btnGhost }} disabled={!hasRequired}>
                 <SeatIcon /> Aircraft Images
               </button>
             </a>
 
             <button
               style={{ ...styles.btn, ...styles.btnAccent }}
+              disabled={!hasRequired}
               onClick={() => {
                 if (!product) {
                   alert(`No product entry for ${airlineKey} / ${cabin} / ${aircraftKey}.\nAdd it in LATEST_PRODUCTS.`);
@@ -336,6 +331,7 @@ export default function Page() {
                 const points = product.sellingPoints?.length ? `\n\nSelling points:\n- ${product.sellingPoints.join("\n- ")}` : "";
                 alert(
                   `${airlineKey} — ${cabin}\n` +
+                    `Route: ${routeKey}\n` +
                     `Aircraft: ${aircraftKey}\n` +
                     `Product: ${product.name}\n` +
                     (product.since ? `Since: ${product.since}\n` : "") +
@@ -349,12 +345,11 @@ export default function Page() {
             </button>
           </div>
 
-          {/* Product strip */}
           <div style={styles.productStrip}>
             <div>
               <div style={styles.kvTitle}>Current selection</div>
               <div style={styles.kvValue}>
-                {airlineKey} · {routeKey} · {aircraftKey} · {cabin}
+                {hasRequired ? `${airlineKey} · ${routeKey} · ${aircraftKey} · ${cabin}` : <span style={{ color: "#777" }}>Fill airline, route, aircraft</span>}
               </div>
             </div>
 
@@ -373,10 +368,10 @@ export default function Page() {
           </div>
         </section>
 
-        {/* Right: Compare */}
+        {/* Compare */}
         <section style={styles.card}>
           <div style={styles.cardTitle}>Compare options</div>
-          <div style={styles.small}>Select airlines and open their seat plan / seat map / images. Great for side-by-side selling.</div>
+          <div style={styles.small}>Pick airlines and open their seat plan / map / images. (Uses your same route + aircraft.)</div>
 
           <div style={styles.comparePicker}>
             {TOP_AIRLINES.map((a) => (
@@ -396,24 +391,24 @@ export default function Page() {
                 </div>
 
                 <div style={styles.small}>
-                  <b>Aircraft:</b> {aircraftKey} · <b>Cabin:</b> {cabin}
+                  <b>Aircraft:</b> {hasRequired ? aircraftKey : "—"} · <b>Cabin:</b> {cabin}
                   <br />
                   <b>Product:</b> {c.product ? c.product.name : "—"}
                 </div>
 
                 <div style={styles.actionsRow}>
                   <a href={c.aerolopa} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniPrimary }}>
+                    <button style={{ ...styles.mini, ...styles.miniPrimary }} disabled={!hasRequired}>
                       <PlaneIcon /> AeroLOPA
                     </button>
                   </a>
                   <a href={c.seatmaps} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniSecondary }}>
+                    <button style={{ ...styles.mini, ...styles.miniSecondary }} disabled={!hasRequired}>
                       <MapIcon /> SeatMaps
                     </button>
                   </a>
                   <a href={c.image} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniGhost }}>
+                    <button style={{ ...styles.mini, ...styles.miniGhost }} disabled={!hasRequired}>
                       <SeatIcon /> Images
                     </button>
                   </a>
@@ -431,10 +426,6 @@ export default function Page() {
   );
 }
 
-/* ===========================
-   SMALL COMPONENTS
-   =========================== */
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={styles.label}>
@@ -449,56 +440,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
    =========================== */
 
 const styles: Record<string, React.CSSProperties> = {
-  page: {
-    maxWidth: 1180,
-    margin: "28px auto",
-    padding: "0 16px 32px",
-    fontFamily: "system-ui",
-  },
+  page: { maxWidth: 1180, margin: "28px auto", padding: "0 16px 32px", fontFamily: "system-ui" },
 
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    gap: 16,
-    marginBottom: 16,
-  },
-
-  brand: {
-    display: "flex",
-    alignItems: "center",
-    gap: 14,
-  },
-
-  logo: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    border: "1px solid #eee",
-    background: "white",
-  },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, marginBottom: 16 },
+  brand: { display: "flex", alignItems: "center", gap: 14 },
+  logo: { width: 44, height: 44, borderRadius: 14, border: "1px solid #eee", background: "white" },
 
   h1: { margin: 0, fontSize: 34, letterSpacing: -0.6 },
   sub: { color: "#555", marginTop: 6, maxWidth: 680 },
 
-  rightPill: {
-    border: "1px solid #eee",
-    borderRadius: 999,
-    padding: "8px 12px",
-    background: "white",
-    color: "#444",
-    fontSize: 13,
-  },
+  rightPill: { border: "1px solid #eee", borderRadius: 999, padding: "8px 12px", background: "white", color: "#444", fontSize: 13 },
 
   layout: { display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 14, alignItems: "start" },
 
-  card: {
-    border: "1px solid #eee",
-    borderRadius: 18,
-    padding: 16,
-    background: "white",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
-  },
+  card: { border: "1px solid #eee", borderRadius: 18, padding: 16, background: "white", boxShadow: "0 10px 30px rgba(0,0,0,0.06)" },
 
   cardTitle: { fontWeight: 900, marginBottom: 10, fontSize: 16 },
 
@@ -507,14 +462,7 @@ const styles: Record<string, React.CSSProperties> = {
   label: { display: "flex", flexDirection: "column", gap: 6 },
   labelText: { fontSize: 12, color: "#444" },
 
-  input: {
-    padding: 10,
-    borderRadius: 12,
-    border: "1px solid #ddd",
-    fontSize: 14,
-    outline: "none",
-    background: "white",
-  },
+  input: { padding: 10, borderRadius: 12, border: "1px solid #ddd", fontSize: 14, outline: "none", background: "white" },
 
   tipBox: { border: "1px solid #eee", borderRadius: 14, padding: 12, marginTop: 12, background: "#fafafa" },
   tipTitle: { fontWeight: 800, marginBottom: 8 },
@@ -535,7 +483,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    fontWeight: 700,
+    fontWeight: 800,
   },
 
   btnPrimary: { background: "#111", color: "white" },
@@ -543,7 +491,7 @@ const styles: Record<string, React.CSSProperties> = {
   btnGhost: { background: "white", color: "#111" },
   btnAccent: { background: "#6D5EF3", color: "white", border: "1px solid rgba(0,0,0,0.06)" },
 
-  muted: { fontWeight: 600, fontSize: 12, opacity: 0.8 },
+  muted: { fontWeight: 700, fontSize: 12, opacity: 0.85 },
 
   productStrip: {
     marginTop: 14,
@@ -556,32 +504,15 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
   },
 
-  kvTitle: { fontSize: 12, color: "#666", fontWeight: 700 },
+  kvTitle: { fontSize: 12, color: "#666", fontWeight: 800 },
   kvValue: { marginTop: 2, fontWeight: 900, color: "#111" },
 
-  newTag: {
-    display: "inline-block",
-    marginLeft: 8,
-    padding: "2px 8px",
-    borderRadius: 999,
-    border: "1px solid #ddd",
-    fontSize: 12,
-    background: "white",
-    fontWeight: 800,
-  },
+  newTag: { display: "inline-block", marginLeft: 8, padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd", fontSize: 12, background: "white", fontWeight: 900 },
 
   small: { color: "#666", fontSize: 13, lineHeight: 1.45 },
 
   comparePicker: { display: "flex", gap: 10, flexWrap: "wrap", margin: "10px 0 12px" },
-  check: {
-    display: "flex",
-    gap: 6,
-    alignItems: "center",
-    border: "1px solid #eee",
-    borderRadius: 999,
-    padding: "6px 10px",
-    background: "#fafafa",
-  },
+  check: { display: "flex", gap: 6, alignItems: "center", border: "1px solid #eee", borderRadius: 999, padding: "6px 10px", background: "#fafafa" },
 
   grid2: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 },
 
@@ -601,11 +532,10 @@ const styles: Record<string, React.CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    fontWeight: 800,
+    fontWeight: 900,
   },
 
   miniPrimary: { background: "#111", color: "white" },
   miniSecondary: { background: "#f3f4f6", color: "#111" },
   miniGhost: { background: "white", color: "#111" },
 };
-
