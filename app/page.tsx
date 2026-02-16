@@ -3,11 +3,10 @@
 import { useMemo, useState } from "react";
 
 /* =========================================================
-   DIRECT LINKS (optional)
-   - If a mapping exists: we open the exact airline+aircraft page.
-   - If not: we open a highly-filtered search page.
-   Key format: "AIRLINE|AIRCRAFT" where AIRCRAFT is normalized:
-   A350-900, A350-1000, 777-300ER, 787-9, A380
+   OPTIONAL DIRECT LINKS (improves accuracy when available)
+   - If a mapping exists: opens exact airline+aircraft page.
+   - If not: opens a filtered search page.
+   Key format: "AIRLINE|AIRCRAFT" (normalized)
    ========================================================= */
 
 const SEATMAPS_URLS: Record<string, string> = {
@@ -24,7 +23,6 @@ const SEATMAPS_URLS: Record<string, string> = {
 };
 
 const AEROLOPA_URLS: Record<string, string> = {
-  // AeroLOPA uses type codes (359, 351, 773 etc.) per airline
   "LH|A350-900": "https://www.aerolopa.com/lh-359",
   "NH|777-300ER": "https://www.aerolopa.com/nh-773",
   "BA|A350-1000": "https://www.aerolopa.com/ba-351",
@@ -33,7 +31,7 @@ const AEROLOPA_URLS: Record<string, string> = {
 };
 
 /* =========================================================
-   TOP 10 airlines (for Compare checkboxes)
+   AIRLINES (Compare)
    ========================================================= */
 
 const TOP_AIRLINES: { code: string; name: string }[] = [
@@ -57,11 +55,12 @@ type Product = {
   name: string;
   isNew?: boolean;
   since?: string;
+  positioning: string; // short headline
+  clientPitch: string; // short client-facing pitch
+  proofPoints: string[]; // bullets
   notes?: string;
-  sellingPoints: string[];
 };
 
-// Richer selling points (edit anytime)
 const PRODUCTS: Product[] = [
   {
     airline: "LH",
@@ -69,13 +68,15 @@ const PRODUCTS: Product[] = [
     name: "Allegris",
     isNew: true,
     since: "2024+ (aircraft/config dependent)",
-    notes: "Use seat plan to confirm Allegris is operating on the chosen flight/date.",
-    sellingPoints: [
-      "Pitch: Lufthansa’s newest long-haul Business Class — a strong ‘new cabin’ differentiator.",
-      "What to sell: more modern design + privacy-led experience vs older cabins.",
-      "Traveler benefit: better comfort story for sleep + long flights (layout dependent).",
-      "Advisor angle: confirm configuration quickly with AeroLOPA/SeatMaps to avoid mismatch.",
+    positioning: "Lufthansa’s newest long-haul Business Class",
+    clientPitch:
+      "If you want the most modern Lufthansa Business experience, Allegris is the one to aim for — newer design, a fresher feel, and a stronger comfort story on long flights.",
+    proofPoints: [
+      "Best ‘new cabin’ talking point on Lufthansa (when operating).",
+      "Great for clients who care about modern design + comfort.",
+      "We’ll verify the exact seat layout via seat plan/map before you fly.",
     ],
+    notes: "Not on every flight — confirm by aircraft and seat map.",
   },
   {
     airline: "NH",
@@ -83,13 +84,15 @@ const PRODUCTS: Product[] = [
     name: "The Room",
     isNew: true,
     since: "2019+ (select 77W)",
-    notes: "Not on every aircraft — verify on seat map.",
-    sellingPoints: [
-      "Pitch: One of the most spacious Business Class seats in the market (suite-like feel).",
-      "What to sell: excellent for sleep + personal space; flagship positioning.",
-      "Advisor angle: strong upsell vs standard J options if the 77W with The Room is confirmed.",
-      "Use seat plan to confirm ‘The Room’ vs older ANA configurations.",
+    positioning: "One of the most spacious Business Class seats",
+    clientPitch:
+      "ANA ‘The Room’ is a standout pick — it’s known for an exceptionally spacious, suite-like feel that’s fantastic for sleeping and arriving rested.",
+    proofPoints: [
+      "A true flagship product when it’s the right aircraft.",
+      "Excellent personal space and sleep narrative.",
+      "We’ll confirm ‘The Room’ on the exact flight using the seat map.",
     ],
+    notes: "Only on certain aircraft/configurations.",
   },
   {
     airline: "BA",
@@ -97,91 +100,55 @@ const PRODUCTS: Product[] = [
     name: "Club Suite",
     isNew: true,
     since: "2019+ (aircraft dependent)",
-    notes: "Only on Club Suite-equipped aircraft; verify by seat plan.",
-    sellingPoints: [
-      "Pitch: BA’s modern Business Class with improved privacy and direct aisle access (when Club Suite).",
-      "What to sell: privacy door story + significant upgrade over legacy Club World.",
-      "Advisor angle: confirm aircraft to avoid older layouts and strengthen the recommendation.",
-      "Use seat map to verify seat type before pitching ‘Club Suite’.",
+    positioning: "BA’s modern Business Class with improved privacy",
+    clientPitch:
+      "When British Airways is operating Club Suite, it’s a strong upgrade — more privacy and a more contemporary feel compared with older BA business cabins.",
+    proofPoints: [
+      "A clear step up vs legacy Club World (when Club Suite).",
+      "Good privacy-led story for overnight routes.",
+      "We’ll validate the exact configuration before you commit.",
     ],
+    notes: "Aircraft-dependent; confirm by seat plan/map.",
   },
   {
     airline: "QR",
     cabin: "Business",
     name: "Qsuite",
     since: "2017+ (aircraft dependent)",
-    sellingPoints: [
-      "Pitch: A benchmark business class — privacy and premium feel (on Qsuite aircraft).",
-      "What to sell: great for couples / privacy narrative; strong brand recognition.",
-      "Advisor angle: always verify seat map — not every aircraft has Qsuite.",
-      "Use as the “gold standard” comparison vs other J products.",
+    positioning: "A benchmark business class when available",
+    clientPitch:
+      "Qsuite is a great premium choice — it’s widely regarded as one of the strongest business products, especially if you value privacy and a high-end feel.",
+    proofPoints: [
+      "Strong ‘best-in-class’ reputation (aircraft dependent).",
+      "Excellent privacy narrative; great for couples on the right layout.",
+      "We’ll confirm Qsuite availability on your exact flight.",
     ],
+    notes: "Not installed on every aircraft.",
   },
   {
     airline: "AF",
     cabin: "First",
     name: "La Première",
-    sellingPoints: [
-      "Pitch: Ultra-premium positioning — ideal ‘best available’ recommendation.",
-      "What to sell: exclusivity, top-tier service narrative, premium arrival/ground experience (where applicable).",
-      "Advisor angle: confirm cabin availability and aircraft; use seat map for confidence.",
-      "Strong for VIP travelers when budget allows.",
+    positioning: "Ultra-premium, best-available positioning",
+    clientPitch:
+      "For the most elevated experience, La Première is the top option — rare, exclusive, and ideal when you want ‘best available’ without compromise.",
+    proofPoints: [
+      "Perfect for VIP travel and milestone trips.",
+      "Strong exclusivity + premium service narrative.",
+      "We’ll confirm cabin availability and aircraft before booking.",
     ],
   },
   {
     airline: "EK",
     cabin: "First",
     name: "Emirates First (A380)",
-    sellingPoints: [
-      "Pitch: Iconic First Class experience — A380 is a selling point itself.",
-      "What to sell: premium journey narrative; standout cabin reputation.",
-      "Advisor angle: confirm aircraft type — A380 vs other aircraft changes the story.",
-      "Use seat map to confirm exact aircraft operating the flight date.",
-    ],
-  },
-  {
-    airline: "UA",
-    cabin: "Business",
-    name: "Polaris",
-    since: "2016+",
-    sellingPoints: [
-      "Pitch: A strong and consistent long-haul Business Class baseline.",
-      "What to sell: reliable hard product + cabin consistency story (route/aircraft dependent).",
-      "Advisor angle: good alternative when ‘new flagship’ isn’t available or pricing favors UA.",
-      "Seat map verification helps confirm layout and avoids mismatched expectations.",
-    ],
-  },
-  {
-    airline: "DL",
-    cabin: "Business",
-    name: "Delta One",
-    sellingPoints: [
-      "Pitch: Strong long-haul premium option; great comparison vs other transoceanic J.",
-      "What to sell: consistency + overall experience story; aircraft/layout dependent.",
-      "Advisor angle: confirm configuration on seat map to support your recommendation.",
-      "Useful when availability or timing makes DL the best overall choice.",
-    ],
-  },
-  {
-    airline: "SQ",
-    cabin: "Business",
-    name: "Singapore Airlines Business",
-    sellingPoints: [
-      "Pitch: Premium brand with a consistently strong traveler experience.",
-      "What to sell: service + comfort narrative; a safe premium recommendation.",
-      "Advisor angle: seat map confirms exact configuration, especially across A350 variants.",
-      "Great for clients prioritizing quality and reliability.",
-    ],
-  },
-  {
-    airline: "AA",
-    cabin: "Business",
-    name: "Flagship Business",
-    sellingPoints: [
-      "Pitch: Competitive business product on key long-haul routes.",
-      "What to sell: strong alternative when pricing/availability beats ‘new product’ cabins.",
-      "Advisor angle: seat map confirms the exact configuration (varies by aircraft).",
-      "Use as comparison baseline vs Club Suite / Allegris / The Room.",
+    positioning: "Iconic First Class experience",
+    clientPitch:
+      "Emirates First on the A380 is a statement choice — iconic, memorable, and a powerful ‘wow factor’ for clients who want the journey to feel special.",
+    proofPoints: [
+      "A380 itself is a major selling point.",
+      "Strong brand recognition and premium perception.",
+      "We’ll verify aircraft type on your travel date.",
     ],
   },
 ];
@@ -237,37 +204,39 @@ function prettyAirline(code: string) {
   return found ? `${found.code} · ${found.name}` : code;
 }
 
-function findProduct(airline: string, cabin: Cabin) {
+function findProductAuto(airline: string, cabin: Cabin) {
   const a = normalizeAirline(airline);
   return PRODUCTS.find((p) => p.airline === a && p.cabin === cabin) ?? null;
 }
 
 /* =========================================================
-   Icons (SeatMaps + Image icons added)
+   Icons (SeatMaps + Images)
    ========================================================= */
 
 function Icon({ children }: { children: React.ReactNode }) {
-  return <span style={{ display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>{children}</span>;
-}
-function PlaneIcon() {
   return (
-    <Icon>
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-        <path d="M2 16l20-6-20-6 4 6h7H6l-4 6z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      </svg>
-    </Icon>
+    <span style={{ display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
+      {children}
+    </span>
   );
 }
+
 function SeatmapIcon() {
   return (
     <Icon>
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
         <path d="M4 5h16v14H4V5z" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M7 8h2M11 8h2M15 8h2M7 12h2M11 12h2M15 12h2M7 16h2M11 16h2M15 16h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path
+          d="M7 8h2M11 8h2M15 8h2M7 12h2M11 12h2M15 12h2M7 16h2M11 16h2M15 16h2"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
       </svg>
     </Icon>
   );
 }
+
 function ImageIcon() {
   return (
     <Icon>
@@ -279,6 +248,7 @@ function ImageIcon() {
     </Icon>
   );
 }
+
 function SparkIcon() {
   return (
     <Icon>
@@ -305,16 +275,19 @@ export default function Page() {
   const routeKey = useMemo(() => normalizeRoute(route), [route]);
   const aircraftKey = useMemo(() => normalizeAircraft(aircraft), [aircraft]);
 
-  const hasRequired = airlineKey.length > 0 && routeKey.length > 0 && aircraftKey.length > 0;
-  const key = `${airlineKey}|${aircraftKey}`;
+  // "Automatic suggestion" triggers as soon as Airline + Cabin are chosen.
+  const hasSuggest = airlineKey.length > 0;
+  const suggestedProduct = useMemo(() => (hasSuggest ? findProductAuto(airlineKey, cabin) : null), [hasSuggest, airlineKey, cabin]);
 
+  // Buttons can work with route/aircraft too, but we only require airline for product suggestion.
+  const hasLinks = airlineKey.length > 0 && (routeKey.length > 0 || aircraftKey.length > 0);
+
+  const key = `${airlineKey}|${aircraftKey}`;
   const searchQ = useMemo(() => buildSearchQuery(airlineKey, routeKey, aircraftKey, cabin), [airlineKey, routeKey, aircraftKey, cabin]);
 
-  const aerolopaUrl = AEROLOPA_URLS[key] ?? `https://www.aerolopa.com/search?query=${searchQ}`;
-  const seatmapsUrl = SEATMAPS_URLS[key] ?? `https://seatmaps.com/search/?q=${searchQ}`;
-  const imageUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${airlineKey} ${aircraftKey} ${cabin} cabin`)}`;
-
-  const product = useMemo(() => (hasRequired ? findProduct(airlineKey, cabin) : null), [hasRequired, airlineKey, cabin]);
+  const aerolopaUrl = (airlineKey && aircraftKey && AEROLOPA_URLS[key]) ? AEROLOPA_URLS[key] : `https://www.aerolopa.com/search?query=${searchQ}`;
+  const seatmapsUrl = (airlineKey && aircraftKey && SEATMAPS_URLS[key]) ? SEATMAPS_URLS[key] : `https://seatmaps.com/search/?q=${searchQ}`;
+  const imageUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${airlineKey} ${aircraftKey || ""} ${cabin} cabin`)}`;
 
   const compareCards = useMemo(() => {
     return compare.map((code) => {
@@ -322,45 +295,53 @@ export default function Page() {
       const ck = `${a}|${aircraftKey}`;
       const q = buildSearchQuery(a, routeKey, aircraftKey, cabin);
 
+      const prod = findProductAuto(a, cabin);
+
       return {
         airline: a,
         airlineLabel: prettyAirline(a),
-        aerolopaUrl: AEROLOPA_URLS[ck] ?? `https://www.aerolopa.com/search?query=${q}`,
-        seatmapsUrl: SEATMAPS_URLS[ck] ?? `https://seatmaps.com/search/?q=${q}`,
-        imageUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey} ${cabin} cabin`)}`,
-        product: hasRequired ? findProduct(a, cabin) : null,
+        aerolopaUrl: (aircraftKey && AEROLOPA_URLS[ck]) ? AEROLOPA_URLS[ck] : `https://www.aerolopa.com/search?query=${q}`,
+        seatmapsUrl: (aircraftKey && SEATMAPS_URLS[ck]) ? SEATMAPS_URLS[ck] : `https://seatmaps.com/search/?q=${q}`,
+        imageUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey || ""} ${cabin} cabin`)}`,
+        product: prod,
       };
     });
-  }, [compare, routeKey, cabin, aircraftKey, hasRequired]);
+  }, [compare, routeKey, cabin, aircraftKey]);
 
   function toggleCompare(code: string) {
     setCompare((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]));
   }
 
-  function pitchText(airlineCode: string, p: Product | null) {
-    const header = `${airlineCode} · ${routeKey} · ${aircraftKey} · ${cabin}`;
-    if (!p) return `${header}\nProduct: —\nUse seat plan + seat map to confirm configuration before pitching.`;
+  function clientPitchText(airlineCode: string, prod: Product | null) {
+    const header = `${airlineCode}${routeKey ? ` · ${routeKey}` : ""}${aircraftKey ? ` · ${aircraftKey}` : ""} · ${cabin}`;
+    if (!prod) {
+      return [
+        header,
+        "",
+        "Suggested pitch:",
+        "A strong premium option — we’ll confirm the seat layout on your exact flight so you know exactly what to expect before you commit.",
+      ].join("\n");
+    }
 
-    const lines = [
+    return [
       header,
-      `Product: ${p.name}${p.isNew ? " (NEW)" : ""}${p.since ? ` · ${p.since}` : ""}`,
-      p.notes ? `Notes: ${p.notes}` : "",
       "",
-      "Selling points:",
-      ...p.sellingPoints.map((s) => `- ${s}`),
+      `Recommended product: ${prod.name}${prod.isNew ? " (NEW)" : ""}${prod.since ? ` · ${prod.since}` : ""}`,
+      `Positioning: ${prod.positioning}`,
       "",
-      `AeroLOPA: ${aerolopaUrl}`,
-      `SeatMaps: ${seatmapsUrl}`,
-      `Images: ${imageUrl}`,
-    ].filter(Boolean);
-
-    return lines.join("\n");
+      "Client-facing pitch:",
+      prod.clientPitch,
+      "",
+      "Why it’s a great pick:",
+      ...prod.proofPoints.map((p) => `- ${p}`),
+      prod.notes ? `\nNote: ${prod.notes}` : "",
+    ].filter(Boolean).join("\n");
   }
 
   async function copyPitch() {
-    const text = pitchText(airlineKey, product);
+    const text = clientPitchText(airlineKey || "—", suggestedProduct);
     await navigator.clipboard.writeText(text);
-    alert("Copied pitch to clipboard ✅");
+    alert("Client pitch copied ✅");
   }
 
   return (
@@ -375,11 +356,13 @@ export default function Page() {
 
           <div>
             <h1 style={styles.h1}>Ascend Seat Image & Map Project</h1>
-            <div style={styles.sub}>Enter airline + route + aircraft to open seat plan, seat map and images — plus product selling points.</div>
+            <div style={styles.sub}>
+              Enter airline + route + aircraft to open seat plan, seat map and images — plus an automatic client-ready pitch.
+            </div>
           </div>
         </div>
 
-        <div style={styles.rightPill}>Compare cabins · Fast selling points</div>
+        <div style={styles.rightPill}>Client-ready pitch · Quick comparison</div>
       </div>
 
       <div style={styles.layout}>
@@ -410,60 +393,59 @@ export default function Page() {
             </Field>
           </div>
 
+          {/* Buttons */}
           <div style={styles.actions}>
+            {/* AeroLOPA button with NO icon */}
             <a href={aerolopaUrl} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnPrimary }} disabled={!hasRequired}>
-                <PlaneIcon /> AeroLOPA Seat Plan
+              <button style={{ ...styles.btn, ...styles.btnPrimary }} disabled={!hasLinks}>
+                AeroLOPA Seat Plan
               </button>
             </a>
 
             <a href={seatmapsUrl} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnSecondary }} disabled={!hasRequired}>
+              <button style={{ ...styles.btn, ...styles.btnSecondary }} disabled={!hasLinks}>
                 <SeatmapIcon /> SeatMaps
               </button>
             </a>
 
             <a href={imageUrl} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnGhost }} disabled={!hasRequired}>
+              <button style={{ ...styles.btn, ...styles.btnGhost }} disabled={!hasLinks}>
                 <ImageIcon /> Aircraft Images
               </button>
             </a>
 
             <button
               style={{ ...styles.btn, ...styles.btnAccent }}
-              disabled={!hasRequired}
+              disabled={!hasSuggest}
               onClick={() => {
-                if (!product) {
-                  alert(`No product entry for ${airlineKey} / ${cabin} yet.\n\nAdd it inside PRODUCTS to display selling points.`);
-                  return;
-                }
-                alert(pitchText(airlineKey, product));
+                alert(clientPitchText(airlineKey || "—", suggestedProduct));
               }}
             >
-              <SparkIcon /> Selling points
+              <SparkIcon /> Client pitch
             </button>
           </div>
 
+          {/* AUTO PRODUCT SUGGESTION STRIP */}
           <div style={styles.productStrip}>
             <div>
-              <div style={styles.kvTitle}>Selection</div>
+              <div style={styles.kvTitle}>Your selection</div>
               <div style={styles.kvValue}>
-                {hasRequired ? `${airlineKey} · ${routeKey} · ${aircraftKey} · ${cabin}` : <span style={{ color: "#777" }}>Fill airline, route, aircraft</span>}
+                {airlineKey ? `${airlineKey}${routeKey ? ` · ${routeKey}` : ""}${aircraftKey ? ` · ${aircraftKey}` : ""} · ${cabin}` : <span style={{ color: "#777" }}>Enter an airline to begin</span>}
               </div>
 
               <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button style={{ ...styles.mini, ...styles.miniGhost }} onClick={copyPitch} disabled={!hasRequired}>
-                  Copy pitch
+                <button style={{ ...styles.mini, ...styles.miniGhost }} onClick={copyPitch} disabled={!hasSuggest}>
+                  Copy client pitch
                 </button>
               </div>
             </div>
 
             <div style={{ textAlign: "right" }}>
-              <div style={styles.kvTitle}>Product</div>
+              <div style={styles.kvTitle}>Auto-suggested product</div>
               <div style={styles.kvValue}>
-                {product ? (
+                {suggestedProduct ? (
                   <>
-                    {product.name} {product.isNew ? <span style={styles.newTag}>NEW</span> : null}
+                    {suggestedProduct.name} {suggestedProduct.isNew ? <span style={styles.newTag}>NEW</span> : null}
                   </>
                 ) : (
                   <span style={{ color: "#777" }}>—</span>
@@ -472,14 +454,30 @@ export default function Page() {
             </div>
           </div>
 
-          {product?.sellingPoints?.length ? (
+          {/* CLIENT-FACING PITCH PANEL */}
+          {hasSuggest ? (
             <div style={styles.sellBox}>
-              <div style={styles.sellTitle}>Suggested selling points</div>
-              <ul style={styles.bullets}>
-                {product.sellingPoints.map((s) => (
-                  <li key={s}>{s}</li>
-                ))}
-              </ul>
+              <div style={styles.sellTitle}>Client-ready pitch</div>
+              <div style={styles.pitch}>
+                {suggestedProduct ? (
+                  <>
+                    <div style={styles.pitchLine}><b>{suggestedProduct.positioning}</b></div>
+                    <div style={styles.pitchLine}>{suggestedProduct.clientPitch}</div>
+                    <div style={styles.pitchLine} />
+                    <div style={styles.pitchLine}><b>Why this option stands out:</b></div>
+                    <ul style={styles.bullets}>
+                      {suggestedProduct.proofPoints.map((s) => (
+                        <li key={s}>{s}</li>
+                      ))}
+                    </ul>
+                    {suggestedProduct.notes ? <div style={styles.note}>Note: {suggestedProduct.notes}</div> : null}
+                  </>
+                ) : (
+                  <div style={styles.pitchLine}>
+                    Enter an airline and we’ll suggest the most compelling product angle for that cabin.
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
         </section>
@@ -487,7 +485,7 @@ export default function Page() {
         {/* COMPARE */}
         <section style={styles.card}>
           <div style={styles.cardTitle}>Compare options</div>
-          <div style={styles.small}>Select airlines — each card uses your same route + aircraft + cabin.</div>
+          <div style={styles.small}>Pick airlines — each card shows a product angle and quick links using your route/aircraft.</div>
 
           <div style={styles.comparePicker}>
             {TOP_AIRLINES.map((a) => (
@@ -513,27 +511,26 @@ export default function Page() {
                   <b>Product:</b> {c.product ? `${c.product.name}${c.product.since ? ` · ${c.product.since}` : ""}` : "—"}
                 </div>
 
-                {c.product?.sellingPoints?.length ? (
-                  <ul style={styles.bullets}>
-                    {c.product.sellingPoints.slice(0, 3).map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ul>
-                ) : null}
+                <div style={styles.comparePitch}>
+                  {c.product ? c.product.clientPitch : "A strong premium option — we’ll confirm the seat layout on the exact flight so expectations match the cabin."}
+                </div>
 
                 <div style={styles.actionsRow}>
+                  {/* no icon on AeroLOPA */}
                   <a href={c.aerolopaUrl} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniPrimary }} disabled={!hasRequired}>
-                      <PlaneIcon /> Seat plan
+                    <button style={{ ...styles.mini, ...styles.miniPrimary }} disabled={!hasLinks}>
+                      Seat plan
                     </button>
                   </a>
+
                   <a href={c.seatmapsUrl} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniSecondary }} disabled={!hasRequired}>
+                    <button style={{ ...styles.mini, ...styles.miniSecondary }} disabled={!hasLinks}>
                       <SeatmapIcon /> Seat map
                     </button>
                   </a>
+
                   <a href={c.imageUrl} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniGhost }} disabled={!hasRequired}>
+                    <button style={{ ...styles.mini, ...styles.miniGhost }} disabled={!hasLinks}>
                       <ImageIcon /> Images
                     </button>
                   </a>
@@ -637,6 +634,10 @@ const styles: Record<string, React.CSSProperties> = {
   sellBox: { marginTop: 12, border: "1px solid #eee", background: "#fff", borderRadius: 16, padding: 12 },
   sellTitle: { fontWeight: 900, marginBottom: 6 },
 
+  pitch: { color: "#222", fontSize: 14, lineHeight: 1.55 },
+  pitchLine: { marginBottom: 8 },
+  note: { marginTop: 10, fontSize: 12, color: "#666" },
+
   comparePicker: { display: "flex", gap: 10, flexWrap: "wrap", margin: "10px 0 12px" },
   check: { display: "flex", gap: 6, alignItems: "center", border: "1px solid #eee", borderRadius: 999, padding: "6px 10px", background: "#fafafa" },
 
@@ -645,6 +646,8 @@ const styles: Record<string, React.CSSProperties> = {
   compareCard: { border: "1px solid #eee", borderRadius: 16, padding: 12, background: "#fff" },
   compareHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   compareTitle: { fontWeight: 900 },
+
+  comparePitch: { marginTop: 10, padding: 10, borderRadius: 12, background: "#fafafa", border: "1px solid #eee", fontSize: 13, color: "#222", lineHeight: 1.5 },
 
   bullets: { margin: "8px 0 0", paddingLeft: 18, color: "#333", fontSize: 13 },
 
