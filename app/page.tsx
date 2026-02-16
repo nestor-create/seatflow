@@ -3,9 +3,11 @@
 import { useMemo, useState } from "react";
 
 /* =========================================================
-   1) DIRECT LINKS (ADD MORE OVER TIME)
-   Key format: "AIRLINE|AIRCRAFT" (normalized)
-   Aircraft examples: A350-900, A350-1000, 777-300ER, 787-9, A380
+   DIRECT LINKS (optional)
+   - If a mapping exists: we open the exact airline+aircraft page.
+   - If not: we open a highly-filtered search page.
+   Key format: "AIRLINE|AIRCRAFT" where AIRCRAFT is normalized:
+   A350-900, A350-1000, 777-300ER, 787-9, A380
    ========================================================= */
 
 const SEATMAPS_URLS: Record<string, string> = {
@@ -22,17 +24,16 @@ const SEATMAPS_URLS: Record<string, string> = {
 };
 
 const AEROLOPA_URLS: Record<string, string> = {
-  // Using AeroLOPA type codes where we’re confident:
+  // AeroLOPA uses type codes (359, 351, 773 etc.) per airline
   "LH|A350-900": "https://www.aerolopa.com/lh-359",
   "NH|777-300ER": "https://www.aerolopa.com/nh-773",
   "BA|A350-1000": "https://www.aerolopa.com/ba-351",
   "AA|777-300ER": "https://www.aerolopa.com/aa-773",
   "QR|A350-1000": "https://www.aerolopa.com/qr-351",
-  // If you find the exact AeroLOPA pages for the rest, add them here.
 };
 
 /* =========================================================
-   2) TOP 10 AIRLINES
+   TOP 10 airlines (for Compare checkboxes)
    ========================================================= */
 
 const TOP_AIRLINES: { code: string; name: string }[] = [
@@ -50,143 +51,143 @@ const TOP_AIRLINES: { code: string; name: string }[] = [
 
 type Cabin = "Economy" | "Premium Economy" | "Business" | "First";
 
-type Preset = {
-  id: string;
-  airline: string; // IATA
-  airlineName: string;
-  route: string; // AAA-BBB
-  aircraft: string;
+type Product = {
+  airline: string;
   cabin: Cabin;
-  productName: string;
-  isNew: boolean;
+  name: string;
+  isNew?: boolean;
   since?: string;
-  highlights: string[];
+  notes?: string;
+  sellingPoints: string[];
 };
 
-/* =========================================================
-   3) PRESETS (Top 10 airlines + route + aircraft + new product)
-   You can edit routes/aircraft anytime.
-   ========================================================= */
-
-const PRESETS: Preset[] = [
+// Richer selling points (edit anytime)
+const PRODUCTS: Product[] = [
   {
-    id: "LH-JFK-MUC-359-J",
     airline: "LH",
-    airlineName: "Lufthansa",
-    route: "JFK-MUC",
-    aircraft: "A350-900",
     cabin: "Business",
-    productName: "Allegris",
+    name: "Allegris",
     isNew: true,
     since: "2024+ (aircraft/config dependent)",
-    highlights: ["Newest LH long-haul J selling point", "Modern cabin + privacy narrative", "Use seat plan to confirm exact layout"],
+    notes: "Use seat plan to confirm Allegris is operating on the chosen flight/date.",
+    sellingPoints: [
+      "Pitch: Lufthansa’s newest long-haul Business Class — a strong ‘new cabin’ differentiator.",
+      "What to sell: more modern design + privacy-led experience vs older cabins.",
+      "Traveler benefit: better comfort story for sleep + long flights (layout dependent).",
+      "Advisor angle: confirm configuration quickly with AeroLOPA/SeatMaps to avoid mismatch.",
+    ],
   },
   {
-    id: "NH-JFK-HND-773-J",
     airline: "NH",
-    airlineName: "ANA",
-    route: "JFK-HND",
-    aircraft: "777-300ER",
     cabin: "Business",
-    productName: "The Room",
+    name: "The Room",
     isNew: true,
     since: "2019+ (select 77W)",
-    highlights: ["Very wide suite-style seat", "Great sleep story", "Flagship product positioning"],
+    notes: "Not on every aircraft — verify on seat map.",
+    sellingPoints: [
+      "Pitch: One of the most spacious Business Class seats in the market (suite-like feel).",
+      "What to sell: excellent for sleep + personal space; flagship positioning.",
+      "Advisor angle: strong upsell vs standard J options if the 77W with The Room is confirmed.",
+      "Use seat plan to confirm ‘The Room’ vs older ANA configurations.",
+    ],
   },
   {
-    id: "BA-JFK-LHR-351-J",
     airline: "BA",
-    airlineName: "British Airways",
-    route: "JFK-LHR",
-    aircraft: "A350-1000",
     cabin: "Business",
-    productName: "Club Suite",
+    name: "Club Suite",
     isNew: true,
     since: "2019+ (aircraft dependent)",
-    highlights: ["Direct aisle access (Club Suite aircraft)", "Better privacy than old Club World", "Confirm by aircraft + seat plan"],
+    notes: "Only on Club Suite-equipped aircraft; verify by seat plan.",
+    sellingPoints: [
+      "Pitch: BA’s modern Business Class with improved privacy and direct aisle access (when Club Suite).",
+      "What to sell: privacy door story + significant upgrade over legacy Club World.",
+      "Advisor angle: confirm aircraft to avoid older layouts and strengthen the recommendation.",
+      "Use seat map to verify seat type before pitching ‘Club Suite’.",
+    ],
   },
   {
-    id: "AA-JFK-LHR-773-J",
-    airline: "AA",
-    airlineName: "American Airlines",
-    route: "JFK-LHR",
-    aircraft: "777-300ER",
-    cabin: "Business",
-    productName: "Flagship Business",
-    isNew: false,
-    highlights: ["Strong alternative on key transatlantic", "Use seat plan to confirm configuration", "Good comparison anchor vs newest cabins"],
-  },
-  {
-    id: "QR-LHR-DOH-351-J",
     airline: "QR",
-    airlineName: "Qatar Airways",
-    route: "LHR-DOH",
-    aircraft: "A350-1000",
     cabin: "Business",
-    productName: "Qsuite",
-    isNew: false,
+    name: "Qsuite",
     since: "2017+ (aircraft dependent)",
-    highlights: ["Industry-famous business class", "Great privacy/couples narrative", "Confirm Qsuite availability by seat plan"],
+    sellingPoints: [
+      "Pitch: A benchmark business class — privacy and premium feel (on Qsuite aircraft).",
+      "What to sell: great for couples / privacy narrative; strong brand recognition.",
+      "Advisor angle: always verify seat map — not every aircraft has Qsuite.",
+      "Use as the “gold standard” comparison vs other J products.",
+    ],
   },
   {
-    id: "SQ-SIN-LHR-359-J",
-    airline: "SQ",
-    airlineName: "Singapore Airlines",
-    route: "SIN-LHR",
-    aircraft: "A350-900",
-    cabin: "Business",
-    productName: "Singapore Airlines Business",
-    isNew: false,
-    highlights: ["Consistent premium experience", "Strong soft product story", "Seat plan confirms exact layout"],
-  },
-  {
-    id: "EK-DXB-JFK-A380-F",
-    airline: "EK",
-    airlineName: "Emirates",
-    route: "DXB-JFK",
-    aircraft: "A380",
-    cabin: "First",
-    productName: "Emirates First (A380)",
-    isNew: false,
-    highlights: ["Iconic premium positioning", "A380 is a major selling point", "Use seat map to confirm aircraft on date"],
-  },
-  {
-    id: "AF-JFK-CDG-773-F",
     airline: "AF",
-    airlineName: "Air France",
-    route: "JFK-CDG",
-    aircraft: "777-300ER",
     cabin: "First",
-    productName: "La Première",
-    isNew: false,
-    highlights: ["Top-tier premium narrative", "Best-available positioning", "Confirm cabin availability by flight/date"],
+    name: "La Première",
+    sellingPoints: [
+      "Pitch: Ultra-premium positioning — ideal ‘best available’ recommendation.",
+      "What to sell: exclusivity, top-tier service narrative, premium arrival/ground experience (where applicable).",
+      "Advisor angle: confirm cabin availability and aircraft; use seat map for confidence.",
+      "Strong for VIP travelers when budget allows.",
+    ],
   },
   {
-    id: "UA-EWR-LHR-789-J",
+    airline: "EK",
+    cabin: "First",
+    name: "Emirates First (A380)",
+    sellingPoints: [
+      "Pitch: Iconic First Class experience — A380 is a selling point itself.",
+      "What to sell: premium journey narrative; standout cabin reputation.",
+      "Advisor angle: confirm aircraft type — A380 vs other aircraft changes the story.",
+      "Use seat map to confirm exact aircraft operating the flight date.",
+    ],
+  },
+  {
     airline: "UA",
-    airlineName: "United Airlines",
-    route: "EWR-LHR",
-    aircraft: "787-9",
     cabin: "Business",
-    productName: "Polaris",
-    isNew: false,
-    highlights: ["Strong long-haul baseline", "Good comparison vs new flagship cabins", "Confirm configuration via seat plan"],
+    name: "Polaris",
+    since: "2016+",
+    sellingPoints: [
+      "Pitch: A strong and consistent long-haul Business Class baseline.",
+      "What to sell: reliable hard product + cabin consistency story (route/aircraft dependent).",
+      "Advisor angle: good alternative when ‘new flagship’ isn’t available or pricing favors UA.",
+      "Seat map verification helps confirm layout and avoids mismatched expectations.",
+    ],
   },
   {
-    id: "DL-JFK-JNB-359-J",
     airline: "DL",
-    airlineName: "Delta Air Lines",
-    route: "JFK-JNB",
-    aircraft: "A350-900",
     cabin: "Business",
-    productName: "Delta One",
-    isNew: false,
-    highlights: ["Solid long-haul experience", "Often competitive availability", "Seat plan confirms layout on aircraft"],
+    name: "Delta One",
+    sellingPoints: [
+      "Pitch: Strong long-haul premium option; great comparison vs other transoceanic J.",
+      "What to sell: consistency + overall experience story; aircraft/layout dependent.",
+      "Advisor angle: confirm configuration on seat map to support your recommendation.",
+      "Useful when availability or timing makes DL the best overall choice.",
+    ],
+  },
+  {
+    airline: "SQ",
+    cabin: "Business",
+    name: "Singapore Airlines Business",
+    sellingPoints: [
+      "Pitch: Premium brand with a consistently strong traveler experience.",
+      "What to sell: service + comfort narrative; a safe premium recommendation.",
+      "Advisor angle: seat map confirms exact configuration, especially across A350 variants.",
+      "Great for clients prioritizing quality and reliability.",
+    ],
+  },
+  {
+    airline: "AA",
+    cabin: "Business",
+    name: "Flagship Business",
+    sellingPoints: [
+      "Pitch: Competitive business product on key long-haul routes.",
+      "What to sell: strong alternative when pricing/availability beats ‘new product’ cabins.",
+      "Advisor angle: seat map confirms the exact configuration (varies by aircraft).",
+      "Use as comparison baseline vs Club Suite / Allegris / The Room.",
+    ],
   },
 ];
 
 /* =========================================================
-   4) NORMALIZATION
+   Helpers
    ========================================================= */
 
 function normalizeAirline(v: string) {
@@ -201,7 +202,6 @@ function normalizeAircraft(input: string) {
   x = x.replace(/^BOEING\s+/i, "");
   x = x.replace(/[_\s]+/g, "-");
 
-  // common short codes → canonical
   if (x === "359" || x === "A359") return "A350-900";
   if (x === "351" || x === "A351" || x === "35K" || x === "A35K") return "A350-1000";
   if (x === "77W" || x === "B77W" || x === "773" || x === "B773") return "777-300ER";
@@ -237,16 +237,17 @@ function prettyAirline(code: string) {
   return found ? `${found.code} · ${found.name}` : code;
 }
 
+function findProduct(airline: string, cabin: Cabin) {
+  const a = normalizeAirline(airline);
+  return PRODUCTS.find((p) => p.airline === a && p.cabin === cabin) ?? null;
+}
+
 /* =========================================================
-   5) ICONS (no libs)
+   Icons (SeatMaps + Image icons added)
    ========================================================= */
 
 function Icon({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{ display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
-      {children}
-    </span>
-  );
+  return <span style={{ display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>{children}</span>;
 }
 function PlaneIcon() {
   return (
@@ -257,23 +258,23 @@ function PlaneIcon() {
     </Icon>
   );
 }
-function MapIcon() {
+function SeatmapIcon() {
   return (
     <Icon>
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-        <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-        <path d="M9 3v15M15 6v15" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M4 5h16v14H4V5z" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M7 8h2M11 8h2M15 8h2M7 12h2M11 12h2M15 12h2M7 16h2M11 16h2M15 16h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     </Icon>
   );
 }
-function SeatIcon() {
+function ImageIcon() {
   return (
     <Icon>
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-        <path d="M7 3h6a4 4 0 014 4v6H7V3z" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M7 13h13v4a3 3 0 01-3 3H10a3 3 0 01-3-3v-4z" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M4 20h16" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M4 6h16v12H4V6z" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M8.5 10a1.2 1.2 0 100-2.4 1.2 1.2 0 000 2.4z" fill="currentColor" />
+        <path d="M4 16l5-5 4 4 3-3 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
       </svg>
     </Icon>
   );
@@ -283,7 +284,6 @@ function SparkIcon() {
     <Icon>
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
         <path d="M12 2l1.2 4.4L18 8l-4.8 1.6L12 14l-1.2-4.4L6 8l4.8-1.6L12 2z" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M19 13l.7 2.5L22 16l-2.3.5L19 19l-.7-2.5L16 16l2.3-.5L19 13z" stroke="currentColor" strokeWidth="1.6" />
       </svg>
     </Icon>
   );
@@ -298,7 +298,6 @@ export default function Page() {
   const [route, setRoute] = useState("");
   const [aircraft, setAircraft] = useState("");
   const [cabin, setCabin] = useState<Cabin>("Business");
-
   const [compare, setCompare] = useState<string[]>(["LH", "NH", "BA"]);
   const [logoOk, setLogoOk] = useState(true);
 
@@ -309,39 +308,13 @@ export default function Page() {
   const hasRequired = airlineKey.length > 0 && routeKey.length > 0 && aircraftKey.length > 0;
   const key = `${airlineKey}|${aircraftKey}`;
 
-  const searchQ = useMemo(
-    () => buildSearchQuery(airlineKey, routeKey, aircraftKey, cabin),
-    [airlineKey, routeKey, aircraftKey, cabin]
-  );
+  const searchQ = useMemo(() => buildSearchQuery(airlineKey, routeKey, aircraftKey, cabin), [airlineKey, routeKey, aircraftKey, cabin]);
 
-  const directSeatmaps = SEATMAPS_URLS[key];
-  const seatmapsUrl = directSeatmaps ?? `https://seatmaps.com/search/?q=${searchQ}`;
-  const seatmapsMode = directSeatmaps ? "Direct" : "Search";
+  const aerolopaUrl = AEROLOPA_URLS[key] ?? `https://www.aerolopa.com/search?query=${searchQ}`;
+  const seatmapsUrl = SEATMAPS_URLS[key] ?? `https://seatmaps.com/search/?q=${searchQ}`;
+  const imageUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${airlineKey} ${aircraftKey} ${cabin} cabin`)}`;
 
-  const directAerolopa = AEROLOPA_URLS[key];
-  const aerolopaUrl = directAerolopa ?? `https://www.aerolopa.com/search?query=${searchQ}`;
-  const aerolopaMode = directAerolopa ? "Direct" : "Search";
-
-  const imageUrl = useMemo(() => {
-    const q = `${airlineKey} ${aircraftKey} ${cabin} seat`;
-    return `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}`;
-  }, [airlineKey, aircraftKey, cabin]);
-
-  const selectedPreset = useMemo(() => {
-    if (!hasRequired) return null;
-    // Try to match a preset by airline+route+aircraft+cabin
-    const r = routeKey;
-    const a = airlineKey;
-    const ac = aircraftKey;
-    const c = cabin;
-    return PRESETS.find(
-      (p) =>
-        p.airline === a &&
-        normalizeRoute(p.route) === r &&
-        normalizeAircraft(p.aircraft) === ac &&
-        p.cabin === c
-    ) ?? null;
-  }, [hasRequired, airlineKey, routeKey, aircraftKey, cabin]);
+  const product = useMemo(() => (hasRequired ? findProduct(airlineKey, cabin) : null), [hasRequired, airlineKey, cabin]);
 
   const compareCards = useMemo(() => {
     return compare.map((code) => {
@@ -349,39 +322,45 @@ export default function Page() {
       const ck = `${a}|${aircraftKey}`;
       const q = buildSearchQuery(a, routeKey, aircraftKey, cabin);
 
-      const smDirect = SEATMAPS_URLS[ck];
-      const alDirect = AEROLOPA_URLS[ck];
-
-      // Product details by airline+cabin (and aircraft if needed) from PRESETS as “recommended”
-      const bestPreset = PRESETS.find(
-        (p) => p.airline === a && p.cabin === cabin
-      );
-
       return {
         airline: a,
         airlineLabel: prettyAirline(a),
-        seatmapsUrl: smDirect ?? `https://seatmaps.com/search/?q=${q}`,
-        seatmapsMode: smDirect ? "Direct" : "Search",
-        aerolopaUrl: alDirect ?? `https://www.aerolopa.com/search?query=${q}`,
-        aerolopaMode: alDirect ? "Direct" : "Search",
-        imageUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey} ${cabin} seat`)}`,
-        productName: bestPreset?.productName ?? "—",
-        isNew: bestPreset?.isNew ?? false,
-        since: bestPreset?.since,
-        highlights: bestPreset?.highlights ?? [],
+        aerolopaUrl: AEROLOPA_URLS[ck] ?? `https://www.aerolopa.com/search?query=${q}`,
+        seatmapsUrl: SEATMAPS_URLS[ck] ?? `https://seatmaps.com/search/?q=${q}`,
+        imageUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey} ${cabin} cabin`)}`,
+        product: hasRequired ? findProduct(a, cabin) : null,
       };
     });
-  }, [compare, routeKey, cabin, aircraftKey]);
+  }, [compare, routeKey, cabin, aircraftKey, hasRequired]);
 
   function toggleCompare(code: string) {
     setCompare((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]));
   }
 
-  function applyPreset(p: Preset) {
-    setAirline(p.airline);
-    setRoute(p.route);
-    setAircraft(p.aircraft);
-    setCabin(p.cabin);
+  function pitchText(airlineCode: string, p: Product | null) {
+    const header = `${airlineCode} · ${routeKey} · ${aircraftKey} · ${cabin}`;
+    if (!p) return `${header}\nProduct: —\nUse seat plan + seat map to confirm configuration before pitching.`;
+
+    const lines = [
+      header,
+      `Product: ${p.name}${p.isNew ? " (NEW)" : ""}${p.since ? ` · ${p.since}` : ""}`,
+      p.notes ? `Notes: ${p.notes}` : "",
+      "",
+      "Selling points:",
+      ...p.sellingPoints.map((s) => `- ${s}`),
+      "",
+      `AeroLOPA: ${aerolopaUrl}`,
+      `SeatMaps: ${seatmapsUrl}`,
+      `Images: ${imageUrl}`,
+    ].filter(Boolean);
+
+    return lines.join("\n");
+  }
+
+  async function copyPitch() {
+    const text = pitchText(airlineKey, product);
+    await navigator.clipboard.writeText(text);
+    alert("Copied pitch to clipboard ✅");
   }
 
   return (
@@ -389,56 +368,23 @@ export default function Page() {
       <div style={styles.header}>
         <div style={styles.brand}>
           {logoOk ? (
-            <img
-              src="/ascend-logo.png"
-              alt="Ascend"
-              style={styles.logo}
-              onError={() => setLogoOk(false)}
-            />
+            <img src="/ascend-logo.png" alt="Ascend" style={styles.logo} onError={() => setLogoOk(false)} />
           ) : (
             <div style={styles.logoFallback}>A</div>
           )}
 
           <div>
             <h1 style={styles.h1}>Ascend Seat Image & Map Project</h1>
-            <div style={styles.sub}>
-              Enter airline + route + aircraft to open seat plans, maps and images — plus “new product” selling points.
-            </div>
+            <div style={styles.sub}>Enter airline + route + aircraft to open seat plan, seat map and images — plus product selling points.</div>
           </div>
         </div>
 
-        <div style={styles.rightPill}>AeroLOPA · SeatMaps · Images</div>
+        <div style={styles.rightPill}>Compare cabins · Fast selling points</div>
       </div>
 
       <div style={styles.layout}>
-        {/* LEFT: Presets + Search */}
+        {/* SEARCH */}
         <section style={styles.card}>
-          <div style={styles.cardTitle}>Top 10 presets</div>
-          <div style={styles.small}>
-            One click fills airline / route / aircraft / cabin, with a recommended product angle.
-          </div>
-
-          <div style={styles.presetGrid}>
-            {PRESETS.map((p) => (
-              <button key={p.id} style={styles.presetCard} onClick={() => applyPreset(p)}>
-                <div style={styles.presetTop}>
-                  <div style={styles.presetTitle}>
-                    {p.airline} · {p.route}
-                  </div>
-                  {p.isNew ? <span style={styles.newTag}>NEW</span> : <span style={styles.oldTag}>STANDARD</span>}
-                </div>
-                <div style={styles.presetMeta}>
-                  <b>{p.aircraft}</b> · {p.cabin}
-                </div>
-                <div style={styles.presetProduct}>
-                  {p.productName}{p.since ? <span style={styles.since}> · {p.since}</span> : null}
-                </div>
-              </button>
-            ))}
-          </div>
-
-          <div style={styles.divider} />
-
           <div style={styles.cardTitle}>Search</div>
 
           <div style={styles.grid}>
@@ -467,19 +413,19 @@ export default function Page() {
           <div style={styles.actions}>
             <a href={aerolopaUrl} target="_blank" rel="noreferrer">
               <button style={{ ...styles.btn, ...styles.btnPrimary }} disabled={!hasRequired}>
-                <PlaneIcon /> AeroLOPA Seat Plan <span style={styles.muted}>({aerolopaMode})</span>
+                <PlaneIcon /> AeroLOPA Seat Plan
               </button>
             </a>
 
             <a href={seatmapsUrl} target="_blank" rel="noreferrer">
               <button style={{ ...styles.btn, ...styles.btnSecondary }} disabled={!hasRequired}>
-                <MapIcon /> SeatMaps <span style={styles.muted}>({seatmapsMode})</span>
+                <SeatmapIcon /> SeatMaps
               </button>
             </a>
 
             <a href={imageUrl} target="_blank" rel="noreferrer">
               <button style={{ ...styles.btn, ...styles.btnGhost }} disabled={!hasRequired}>
-                <SeatIcon /> Aircraft Images
+                <ImageIcon /> Aircraft Images
               </button>
             </a>
 
@@ -487,20 +433,14 @@ export default function Page() {
               style={{ ...styles.btn, ...styles.btnAccent }}
               disabled={!hasRequired}
               onClick={() => {
-                if (!selectedPreset) {
-                  alert("No matching preset for this exact combination.\n\nTip: pick a preset first or add one to PRESETS.");
+                if (!product) {
+                  alert(`No product entry for ${airlineKey} / ${cabin} yet.\n\nAdd it inside PRODUCTS to display selling points.`);
                   return;
                 }
-                const bullet = selectedPreset.highlights.map((h) => `- ${h}`).join("\n");
-                alert(
-                  `${selectedPreset.airline} · ${selectedPreset.route} · ${selectedPreset.aircraft} · ${selectedPreset.cabin}\n\n` +
-                    `Product: ${selectedPreset.productName}${selectedPreset.isNew ? " (NEW)" : ""}\n` +
-                    (selectedPreset.since ? `Since: ${selectedPreset.since}\n\n` : "\n") +
-                    `Selling points:\n${bullet}`
-                );
+                alert(pitchText(airlineKey, product));
               }}
             >
-              <SparkIcon /> New product?
+              <SparkIcon /> Selling points
             </button>
           </div>
 
@@ -510,17 +450,20 @@ export default function Page() {
               <div style={styles.kvValue}>
                 {hasRequired ? `${airlineKey} · ${routeKey} · ${aircraftKey} · ${cabin}` : <span style={{ color: "#777" }}>Fill airline, route, aircraft</span>}
               </div>
-              <div style={styles.debugLine}>
-                AeroLOPA: <b>{aerolopaMode}</b> · SeatMaps: <b>{seatmapsMode}</b>
+
+              <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button style={{ ...styles.mini, ...styles.miniGhost }} onClick={copyPitch} disabled={!hasRequired}>
+                  Copy pitch
+                </button>
               </div>
             </div>
 
             <div style={{ textAlign: "right" }}>
-              <div style={styles.kvTitle}>Recommended product</div>
+              <div style={styles.kvTitle}>Product</div>
               <div style={styles.kvValue}>
-                {selectedPreset ? (
+                {product ? (
                   <>
-                    {selectedPreset.productName} {selectedPreset.isNew && <span style={styles.newTag}>NEW</span>}
+                    {product.name} {product.isNew ? <span style={styles.newTag}>NEW</span> : null}
                   </>
                 ) : (
                   <span style={{ color: "#777" }}>—</span>
@@ -528,14 +471,23 @@ export default function Page() {
               </div>
             </div>
           </div>
+
+          {product?.sellingPoints?.length ? (
+            <div style={styles.sellBox}>
+              <div style={styles.sellTitle}>Suggested selling points</div>
+              <ul style={styles.bullets}>
+                {product.sellingPoints.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
 
-        {/* RIGHT: Compare */}
+        {/* COMPARE */}
         <section style={styles.card}>
           <div style={styles.cardTitle}>Compare options</div>
-          <div style={styles.small}>
-            Select airlines — buttons open the seat plan / seat map / images using the same route + aircraft + cabin you entered.
-          </div>
+          <div style={styles.small}>Select airlines — each card uses your same route + aircraft + cabin.</div>
 
           <div style={styles.comparePicker}>
             {TOP_AIRLINES.map((a) => (
@@ -551,51 +503,43 @@ export default function Page() {
               <div key={c.airline} style={styles.compareCard}>
                 <div style={styles.compareHeader}>
                   <div style={styles.compareTitle}>{c.airlineLabel}</div>
-                  {c.isNew && <span style={styles.newTag}>NEW</span>}
+                  {c.product?.isNew ? <span style={styles.newTag}>NEW</span> : null}
                 </div>
 
                 <div style={styles.small}>
                   <b>Route:</b> {routeKey || "—"} <br />
                   <b>Aircraft:</b> {aircraftKey || "—"} · <b>Cabin:</b> {cabin}
                   <br />
-                  <b>Product:</b> {c.productName}{c.since ? ` · ${c.since}` : ""}
+                  <b>Product:</b> {c.product ? `${c.product.name}${c.product.since ? ` · ${c.product.since}` : ""}` : "—"}
                 </div>
 
-                {c.highlights.length ? (
+                {c.product?.sellingPoints?.length ? (
                   <ul style={styles.bullets}>
-                    {c.highlights.slice(0, 3).map((s) => (
+                    {c.product.sellingPoints.slice(0, 3).map((s) => (
                       <li key={s}>{s}</li>
                     ))}
                   </ul>
                 ) : null}
 
-                <div style={styles.compareMeta}>
-                  AeroLOPA: <b>{c.aerolopaMode}</b> · SeatMaps: <b>{c.seatmapsMode}</b>
-                </div>
-
                 <div style={styles.actionsRow}>
                   <a href={c.aerolopaUrl} target="_blank" rel="noreferrer">
                     <button style={{ ...styles.mini, ...styles.miniPrimary }} disabled={!hasRequired}>
-                      <PlaneIcon /> AeroLOPA
+                      <PlaneIcon /> Seat plan
                     </button>
                   </a>
                   <a href={c.seatmapsUrl} target="_blank" rel="noreferrer">
                     <button style={{ ...styles.mini, ...styles.miniSecondary }} disabled={!hasRequired}>
-                      <MapIcon /> SeatMaps
+                      <SeatmapIcon /> Seat map
                     </button>
                   </a>
                   <a href={c.imageUrl} target="_blank" rel="noreferrer">
                     <button style={{ ...styles.mini, ...styles.miniGhost }} disabled={!hasRequired}>
-                      <SeatIcon /> Images
+                      <ImageIcon /> Images
                     </button>
                   </a>
                 </div>
               </div>
             ))}
-          </div>
-
-          <div style={styles.tipSub}>
-            If you want every result to be <b>Direct</b>, add more mappings in <b>AEROLOPA_URLS</b> and <b>SEATMAPS_URLS</b>.
           </div>
         </section>
       </div>
@@ -641,29 +585,11 @@ const styles: Record<string, React.CSSProperties> = {
 
   rightPill: { border: "1px solid #eee", borderRadius: 999, padding: "8px 12px", background: "white", color: "#444", fontSize: 13 },
 
-  layout: { display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 14, alignItems: "start" },
+  layout: { display: "grid", gridTemplateColumns: "1.05fr 1fr", gap: 14, alignItems: "start" },
   card: { border: "1px solid #eee", borderRadius: 18, padding: 16, background: "white", boxShadow: "0 10px 30px rgba(0,0,0,0.06)" },
 
   cardTitle: { fontWeight: 900, marginBottom: 10, fontSize: 16 },
-
   small: { color: "#666", fontSize: 13, lineHeight: 1.45 },
-
-  presetGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 10 },
-  presetCard: {
-    textAlign: "left",
-    border: "1px solid #eee",
-    background: "#fafafa",
-    borderRadius: 16,
-    padding: 12,
-    cursor: "pointer",
-  },
-  presetTop: { display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" },
-  presetTitle: { fontWeight: 900 },
-  presetMeta: { marginTop: 6, color: "#222", fontSize: 13 },
-  presetProduct: { marginTop: 6, color: "#444", fontSize: 13, fontWeight: 800 },
-  since: { fontWeight: 700, color: "#666" },
-
-  divider: { height: 1, background: "#eee", margin: "14px 0" },
 
   grid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 8 },
 
@@ -692,8 +618,6 @@ const styles: Record<string, React.CSSProperties> = {
   btnGhost: { background: "white", color: "#111" },
   btnAccent: { background: "#6D5EF3", color: "white", border: "1px solid rgba(0,0,0,0.06)" },
 
-  muted: { fontWeight: 700, fontSize: 12, opacity: 0.85 },
-
   productStrip: {
     marginTop: 14,
     padding: 12,
@@ -707,29 +631,11 @@ const styles: Record<string, React.CSSProperties> = {
 
   kvTitle: { fontSize: 12, color: "#666", fontWeight: 800 },
   kvValue: { marginTop: 2, fontWeight: 900, color: "#111" },
-  debugLine: { marginTop: 6, fontSize: 12, color: "#666" },
 
-  newTag: {
-    display: "inline-block",
-    padding: "2px 8px",
-    borderRadius: 999,
-    border: "1px solid rgba(0,0,0,0.08)",
-    fontSize: 12,
-    background: "white",
-    fontWeight: 900,
-  },
-  oldTag: {
-    display: "inline-block",
-    padding: "2px 8px",
-    borderRadius: 999,
-    border: "1px solid rgba(0,0,0,0.08)",
-    fontSize: 12,
-    background: "white",
-    fontWeight: 900,
-    color: "#666",
-  },
+  newTag: { display: "inline-block", marginLeft: 8, padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd", fontSize: 12, background: "white", fontWeight: 900 },
 
-  tipSub: { color: "#777", fontSize: 12, marginTop: 10 },
+  sellBox: { marginTop: 12, border: "1px solid #eee", background: "#fff", borderRadius: 16, padding: 12 },
+  sellTitle: { fontWeight: 900, marginBottom: 6 },
 
   comparePicker: { display: "flex", gap: 10, flexWrap: "wrap", margin: "10px 0 12px" },
   check: { display: "flex", gap: 6, alignItems: "center", border: "1px solid #eee", borderRadius: 999, padding: "6px 10px", background: "#fafafa" },
@@ -739,8 +645,6 @@ const styles: Record<string, React.CSSProperties> = {
   compareCard: { border: "1px solid #eee", borderRadius: 16, padding: 12, background: "#fff" },
   compareHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   compareTitle: { fontWeight: 900 },
-
-  compareMeta: { marginTop: 8, fontSize: 12, color: "#666" },
 
   bullets: { margin: "8px 0 0", paddingLeft: 18, color: "#333", fontSize: 13 },
 
