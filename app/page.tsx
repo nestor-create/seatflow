@@ -2,19 +2,18 @@
 
 import { useMemo, useState } from "react";
 
-/* ===========================
-   DIRECT LINKS (EDIT THESE)
-   Key format: "AIRLINE|AIRCRAFT"
-   AIRCRAFT normalized like:
-   A350-900, A350-1000, 777-300ER, 787-9, A380
-   =========================== */
+/* =========================================================
+   1) DIRECT LINKS (ADD MORE OVER TIME)
+   Key format: "AIRLINE|AIRCRAFT" (normalized)
+   Aircraft examples: A350-900, A350-1000, 777-300ER, 787-9, A380
+   ========================================================= */
 
 const SEATMAPS_URLS: Record<string, string> = {
   "LH|A350-900": "https://seatmaps.com/airlines/lh-lufthansa/airbus-a350-900/",
   "NH|777-300ER": "https://seatmaps.com/airlines/nh-all-nippon-airways/boeing-777-300er/",
   "BA|A350-1000": "https://seatmaps.com/airlines/ba-british-airways/airbus-a350-1000/",
-  "QR|A350-1000": "https://seatmaps.com/airlines/qr-qatar-airways/airbus-a350-1000/",
   "AA|777-300ER": "https://seatmaps.com/airlines/aa-american-airlines/boeing-777-300er/",
+  "QR|A350-1000": "https://seatmaps.com/airlines/qr-qatar-airways/airbus-a350-1000/",
   "SQ|A350-900": "https://seatmaps.com/airlines/sq-singapore-airlines/airbus-a350-900/",
   "EK|A380": "https://seatmaps.com/airlines/ek-emirates/airbus-a380/",
   "AF|777-300ER": "https://seatmaps.com/airlines/af-air-france/boeing-777-300er/",
@@ -23,12 +22,18 @@ const SEATMAPS_URLS: Record<string, string> = {
 };
 
 const AEROLOPA_URLS: Record<string, string> = {
+  // Using AeroLOPA type codes where we’re confident:
   "LH|A350-900": "https://www.aerolopa.com/lh-359",
   "NH|777-300ER": "https://www.aerolopa.com/nh-773",
   "BA|A350-1000": "https://www.aerolopa.com/ba-351",
-  "QR|A350-1000": "https://www.aerolopa.com/qr-351",
   "AA|777-300ER": "https://www.aerolopa.com/aa-773",
+  "QR|A350-1000": "https://www.aerolopa.com/qr-351",
+  // If you find the exact AeroLOPA pages for the rest, add them here.
 };
+
+/* =========================================================
+   2) TOP 10 AIRLINES
+   ========================================================= */
 
 const TOP_AIRLINES: { code: string; name: string }[] = [
   { code: "AA", name: "American Airlines" },
@@ -45,68 +50,151 @@ const TOP_AIRLINES: { code: string; name: string }[] = [
 
 type Cabin = "Economy" | "Premium Economy" | "Business" | "First";
 
-type Product = {
-  airline: string;
+type Preset = {
+  id: string;
+  airline: string; // IATA
+  airlineName: string;
+  route: string; // AAA-BBB
+  aircraft: string;
   cabin: Cabin;
-  aircraft?: string;
-  name: string;
-  since?: string;
+  productName: string;
   isNew: boolean;
-  notes?: string;
-  sellingPoints?: string[];
+  since?: string;
+  highlights: string[];
 };
 
-const LATEST_PRODUCTS: Product[] = [
+/* =========================================================
+   3) PRESETS (Top 10 airlines + route + aircraft + new product)
+   You can edit routes/aircraft anytime.
+   ========================================================= */
+
+const PRESETS: Preset[] = [
   {
+    id: "LH-JFK-MUC-359-J",
     airline: "LH",
-    cabin: "Business",
+    airlineName: "Lufthansa",
+    route: "JFK-MUC",
     aircraft: "A350-900",
-    name: "Allegris",
-    since: "2024+",
+    cabin: "Business",
+    productName: "Allegris",
     isNew: true,
-    notes: "Aircraft/config dependent",
-    sellingPoints: ["Newest Lufthansa long-haul J", "Strong privacy + comfort", "Great ‘new product’ selling point"],
+    since: "2024+ (aircraft/config dependent)",
+    highlights: ["Newest LH long-haul J selling point", "Modern cabin + privacy narrative", "Use seat plan to confirm exact layout"],
   },
   {
+    id: "NH-JFK-HND-773-J",
     airline: "NH",
-    cabin: "Business",
+    airlineName: "ANA",
+    route: "JFK-HND",
     aircraft: "777-300ER",
-    name: "The Room",
-    since: "2019+",
+    cabin: "Business",
+    productName: "The Room",
     isNew: true,
-    sellingPoints: ["Wide suite-style seats", "Excellent for sleep", "Top-tier flagship product"],
+    since: "2019+ (select 77W)",
+    highlights: ["Very wide suite-style seat", "Great sleep story", "Flagship product positioning"],
   },
-  { airline: "NH", cabin: "First", aircraft: "777-300ER", name: "The Suite", since: "2019+", isNew: true },
-  { airline: "BA", cabin: "Business", aircraft: "A350-1000", name: "Club Suite", since: "2019+", isNew: true },
-  { airline: "QR", cabin: "Business", aircraft: "A350-1000", name: "Qsuite", since: "2017+", isNew: false },
-  { airline: "UA", cabin: "Business", name: "Polaris", since: "2016+", isNew: false },
+  {
+    id: "BA-JFK-LHR-351-J",
+    airline: "BA",
+    airlineName: "British Airways",
+    route: "JFK-LHR",
+    aircraft: "A350-1000",
+    cabin: "Business",
+    productName: "Club Suite",
+    isNew: true,
+    since: "2019+ (aircraft dependent)",
+    highlights: ["Direct aisle access (Club Suite aircraft)", "Better privacy than old Club World", "Confirm by aircraft + seat plan"],
+  },
+  {
+    id: "AA-JFK-LHR-773-J",
+    airline: "AA",
+    airlineName: "American Airlines",
+    route: "JFK-LHR",
+    aircraft: "777-300ER",
+    cabin: "Business",
+    productName: "Flagship Business",
+    isNew: false,
+    highlights: ["Strong alternative on key transatlantic", "Use seat plan to confirm configuration", "Good comparison anchor vs newest cabins"],
+  },
+  {
+    id: "QR-LHR-DOH-351-J",
+    airline: "QR",
+    airlineName: "Qatar Airways",
+    route: "LHR-DOH",
+    aircraft: "A350-1000",
+    cabin: "Business",
+    productName: "Qsuite",
+    isNew: false,
+    since: "2017+ (aircraft dependent)",
+    highlights: ["Industry-famous business class", "Great privacy/couples narrative", "Confirm Qsuite availability by seat plan"],
+  },
+  {
+    id: "SQ-SIN-LHR-359-J",
+    airline: "SQ",
+    airlineName: "Singapore Airlines",
+    route: "SIN-LHR",
+    aircraft: "A350-900",
+    cabin: "Business",
+    productName: "Singapore Airlines Business",
+    isNew: false,
+    highlights: ["Consistent premium experience", "Strong soft product story", "Seat plan confirms exact layout"],
+  },
+  {
+    id: "EK-DXB-JFK-A380-F",
+    airline: "EK",
+    airlineName: "Emirates",
+    route: "DXB-JFK",
+    aircraft: "A380",
+    cabin: "First",
+    productName: "Emirates First (A380)",
+    isNew: false,
+    highlights: ["Iconic premium positioning", "A380 is a major selling point", "Use seat map to confirm aircraft on date"],
+  },
+  {
+    id: "AF-JFK-CDG-773-F",
+    airline: "AF",
+    airlineName: "Air France",
+    route: "JFK-CDG",
+    aircraft: "777-300ER",
+    cabin: "First",
+    productName: "La Première",
+    isNew: false,
+    highlights: ["Top-tier premium narrative", "Best-available positioning", "Confirm cabin availability by flight/date"],
+  },
+  {
+    id: "UA-EWR-LHR-789-J",
+    airline: "UA",
+    airlineName: "United Airlines",
+    route: "EWR-LHR",
+    aircraft: "787-9",
+    cabin: "Business",
+    productName: "Polaris",
+    isNew: false,
+    highlights: ["Strong long-haul baseline", "Good comparison vs new flagship cabins", "Confirm configuration via seat plan"],
+  },
+  {
+    id: "DL-JFK-JNB-359-J",
+    airline: "DL",
+    airlineName: "Delta Air Lines",
+    route: "JFK-JNB",
+    aircraft: "A350-900",
+    cabin: "Business",
+    productName: "Delta One",
+    isNew: false,
+    highlights: ["Solid long-haul experience", "Often competitive availability", "Seat plan confirms layout on aircraft"],
+  },
 ];
 
-/* Optional: route suggestions (manual) */
-const ROUTE_AIRCRAFT: Record<string, Partial<Record<string, string[]>>> = {
-  "JFK-LHR": {
-    BA: ["A350-1000", "777-300ER", "A380"],
-    AA: ["777-300ER", "787-9", "777-200ER"],
-    LH: ["A350-900", "747-8"],
-  },
-  "JFK-HND": {
-    NH: ["777-300ER", "787-9"],
-    UA: ["787-9", "777-200ER"],
-  },
-};
-
-/* ===========================
-   NORMALIZATION
-   =========================== */
+/* =========================================================
+   4) NORMALIZATION
+   ========================================================= */
 
 function normalizeAirline(v: string) {
   return (v || "").trim().toUpperCase();
 }
-
 function normalizeRoute(v: string) {
   return (v || "").trim().toUpperCase().replace(/\s+/g, "");
 }
-
 function normalizeAircraft(input: string) {
   let x = (input || "").trim().toUpperCase();
   x = x.replace(/^AIRBUS\s+/i, "");
@@ -131,23 +219,17 @@ function normalizeAircraft(input: string) {
   return x;
 }
 
-function buildQuery({ airline, route, aircraft, cabin }: { airline: string; route: string; aircraft: string; cabin: string }) {
-  const parts = [airline && `airline ${airline}`, route && `route ${route}`, aircraft && `aircraft ${aircraft}`, cabin && `cabin ${cabin}`]
+function buildSearchQuery(airline: string, route: string, aircraft: string, cabin: string) {
+  const parts = [
+    airline && `airline ${airline}`,
+    route && `route ${route}`,
+    aircraft && `aircraft ${aircraft}`,
+    cabin && `cabin ${cabin}`,
+    "seat map",
+  ]
     .filter(Boolean)
     .join(" ");
   return encodeURIComponent(parts);
-}
-
-function findLatestProduct(airline: string, cabin: Cabin, aircraft: string) {
-  const a = normalizeAirline(airline);
-  const ac = normalizeAircraft(aircraft);
-
-  const exact = LATEST_PRODUCTS.find(
-    (p) => p.airline === a && p.cabin === cabin && p.aircraft && normalizeAircraft(p.aircraft) === ac
-  );
-  if (exact) return exact;
-
-  return LATEST_PRODUCTS.find((p) => p.airline === a && p.cabin === cabin && !p.aircraft) ?? null;
 }
 
 function prettyAirline(code: string) {
@@ -155,12 +237,16 @@ function prettyAirline(code: string) {
   return found ? `${found.code} · ${found.name}` : code;
 }
 
-/* ===========================
-   ICONS (no libs)
-   =========================== */
+/* =========================================================
+   5) ICONS (no libs)
+   ========================================================= */
 
 function Icon({ children }: { children: React.ReactNode }) {
-  return <span style={{ display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>{children}</span>;
+  return (
+    <span style={{ display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
+      {children}
+    </span>
+  );
 }
 function PlaneIcon() {
   return (
@@ -203,9 +289,9 @@ function SparkIcon() {
   );
 }
 
-/* ===========================
+/* =========================================================
    PAGE
-   =========================== */
+   ========================================================= */
 
 export default function Page() {
   const [airline, setAirline] = useState("");
@@ -213,10 +299,7 @@ export default function Page() {
   const [aircraft, setAircraft] = useState("");
   const [cabin, setCabin] = useState<Cabin>("Business");
 
-  // Paste helper (from Google Flights / notes)
-  const [pasteAircraft, setPasteAircraft] = useState("");
-
-  const [compare, setCompare] = useState<string[]>(["AA", "BA"]);
+  const [compare, setCompare] = useState<string[]>(["LH", "NH", "BA"]);
   const [logoOk, setLogoOk] = useState(true);
 
   const airlineKey = useMemo(() => normalizeAirline(airline), [airline]);
@@ -224,87 +307,81 @@ export default function Page() {
   const aircraftKey = useMemo(() => normalizeAircraft(aircraft), [aircraft]);
 
   const hasRequired = airlineKey.length > 0 && routeKey.length > 0 && aircraftKey.length > 0;
-  const directKey = `${airlineKey}|${aircraftKey}`;
+  const key = `${airlineKey}|${aircraftKey}`;
 
-  const suggestedAircraft = useMemo(() => {
-    if (!routeKey || !airlineKey) return [];
-    return ROUTE_AIRCRAFT[routeKey]?.[airlineKey] ?? [];
-  }, [routeKey, airlineKey]);
+  const searchQ = useMemo(
+    () => buildSearchQuery(airlineKey, routeKey, aircraftKey, cabin),
+    [airlineKey, routeKey, aircraftKey, cabin]
+  );
 
-  const query = useMemo(() => buildQuery({ airline: airlineKey, route: routeKey, aircraft: aircraftKey, cabin }), [
-    airlineKey,
-    routeKey,
-    aircraftKey,
-    cabin,
-  ]);
-
-  const directSeatmaps = SEATMAPS_URLS[directKey];
-  const seatmapsUrl = directSeatmaps ?? `https://seatmaps.com/search/?q=${query}`;
+  const directSeatmaps = SEATMAPS_URLS[key];
+  const seatmapsUrl = directSeatmaps ?? `https://seatmaps.com/search/?q=${searchQ}`;
   const seatmapsMode = directSeatmaps ? "Direct" : "Search";
 
-  const directAerolopa = AEROLOPA_URLS[directKey];
-  const aerolopaUrl = directAerolopa ?? `https://www.aerolopa.com/search?query=${query}`;
+  const directAerolopa = AEROLOPA_URLS[key];
+  const aerolopaUrl = directAerolopa ?? `https://www.aerolopa.com/search?query=${searchQ}`;
   const aerolopaMode = directAerolopa ? "Direct" : "Search";
 
-  const imageUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${airlineKey} ${aircraftKey} ${cabin} seat`)}`;
+  const imageUrl = useMemo(() => {
+    const q = `${airlineKey} ${aircraftKey} ${cabin} seat`;
+    return `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}`;
+  }, [airlineKey, aircraftKey, cabin]);
 
-  const product = useMemo(() => (hasRequired ? findLatestProduct(airlineKey, cabin, aircraftKey) : null), [
-    hasRequired,
-    airlineKey,
-    cabin,
-    aircraftKey,
-  ]);
+  const selectedPreset = useMemo(() => {
+    if (!hasRequired) return null;
+    // Try to match a preset by airline+route+aircraft+cabin
+    const r = routeKey;
+    const a = airlineKey;
+    const ac = aircraftKey;
+    const c = cabin;
+    return PRESETS.find(
+      (p) =>
+        p.airline === a &&
+        normalizeRoute(p.route) === r &&
+        normalizeAircraft(p.aircraft) === ac &&
+        p.cabin === c
+    ) ?? null;
+  }, [hasRequired, airlineKey, routeKey, aircraftKey, cabin]);
 
   const compareCards = useMemo(() => {
     return compare.map((code) => {
       const a = normalizeAirline(code);
       const ck = `${a}|${aircraftKey}`;
-      const q = buildQuery({ airline: a, route: routeKey, aircraft: aircraftKey, cabin });
+      const q = buildSearchQuery(a, routeKey, aircraftKey, cabin);
 
       const smDirect = SEATMAPS_URLS[ck];
       const alDirect = AEROLOPA_URLS[ck];
 
-      const seatmapsUrl2 = smDirect ?? `https://seatmaps.com/search/?q=${q}`;
-      const aerolopaUrl2 = alDirect ?? `https://www.aerolopa.com/search?query=${q}`;
+      // Product details by airline+cabin (and aircraft if needed) from PRESETS as “recommended”
+      const bestPreset = PRESETS.find(
+        (p) => p.airline === a && p.cabin === cabin
+      );
 
       return {
         airline: a,
-        seatmapsUrl: seatmapsUrl2,
+        airlineLabel: prettyAirline(a),
+        seatmapsUrl: smDirect ?? `https://seatmaps.com/search/?q=${q}`,
         seatmapsMode: smDirect ? "Direct" : "Search",
-        aerolopaUrl: aerolopaUrl2,
+        aerolopaUrl: alDirect ?? `https://www.aerolopa.com/search?query=${q}`,
         aerolopaMode: alDirect ? "Direct" : "Search",
         imageUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey} ${cabin} seat`)}`,
-        product: hasRequired ? findLatestProduct(a, cabin, aircraftKey) : null,
+        productName: bestPreset?.productName ?? "—",
+        isNew: bestPreset?.isNew ?? false,
+        since: bestPreset?.since,
+        highlights: bestPreset?.highlights ?? [],
       };
     });
-  }, [compare, routeKey, cabin, aircraftKey, hasRequired]);
+  }, [compare, routeKey, cabin, aircraftKey]);
 
   function toggleCompare(code: string) {
     setCompare((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]));
   }
 
-  function applyPastedAircraft() {
-    // Example pastes:
-    // "LH 359", "Lufthansa A350-900", "ANA 77W"
-    const normalized = normalizeAircraft(pasteAircraft);
-    if (!normalized) return;
-    setAircraft(normalized);
-  }
-
-  function copyPitch(p: Product | null, a: string) {
-    const header = `${a} · ${cabin} · ${aircraftKey} · ${routeKey}`;
-    if (!p) {
-      navigator.clipboard.writeText(`${header}\nProduct: —\nSeat map: ${seatmapsUrl}\nAeroLOPA: ${aerolopaUrl}\nImages: ${imageUrl}`);
-      return;
-    }
-    const bullets = p.sellingPoints?.length ? p.sellingPoints.map((s) => `- ${s}`).join("\n") : "";
-    const text =
-      `${header}\n` +
-      `Product: ${p.name}${p.isNew ? " (NEW)" : ""}${p.since ? ` · Since ${p.since}` : ""}\n` +
-      (p.notes ? `Notes: ${p.notes}\n` : "") +
-      (bullets ? `Selling points:\n${bullets}\n` : "") +
-      `AeroLOPA: ${aerolopaUrl}\nSeatMaps: ${seatmapsUrl}\nImages: ${imageUrl}\n`;
-    navigator.clipboard.writeText(text);
+  function applyPreset(p: Preset) {
+    setAirline(p.airline);
+    setRoute(p.route);
+    setAircraft(p.aircraft);
+    setCabin(p.cabin);
   }
 
   return (
@@ -312,7 +389,12 @@ export default function Page() {
       <div style={styles.header}>
         <div style={styles.brand}>
           {logoOk ? (
-            <img src="/ascend-logo.png" alt="Ascend" style={styles.logo} onError={() => setLogoOk(false)} />
+            <img
+              src="/ascend-logo.png"
+              alt="Ascend"
+              style={styles.logo}
+              onError={() => setLogoOk(false)}
+            />
           ) : (
             <div style={styles.logoFallback}>A</div>
           )}
@@ -320,16 +402,43 @@ export default function Page() {
           <div>
             <h1 style={styles.h1}>Ascend Seat Image & Map Project</h1>
             <div style={styles.sub}>
-              Manual for now. Later you can plug in a real data source — without scraping Google Flights.
+              Enter airline + route + aircraft to open seat plans, maps and images — plus “new product” selling points.
             </div>
           </div>
         </div>
-        <div style={styles.rightPill}>No AI · Manual data</div>
+
+        <div style={styles.rightPill}>AeroLOPA · SeatMaps · Images</div>
       </div>
 
       <div style={styles.layout}>
-        {/* Search */}
+        {/* LEFT: Presets + Search */}
         <section style={styles.card}>
+          <div style={styles.cardTitle}>Top 10 presets</div>
+          <div style={styles.small}>
+            One click fills airline / route / aircraft / cabin, with a recommended product angle.
+          </div>
+
+          <div style={styles.presetGrid}>
+            {PRESETS.map((p) => (
+              <button key={p.id} style={styles.presetCard} onClick={() => applyPreset(p)}>
+                <div style={styles.presetTop}>
+                  <div style={styles.presetTitle}>
+                    {p.airline} · {p.route}
+                  </div>
+                  {p.isNew ? <span style={styles.newTag}>NEW</span> : <span style={styles.oldTag}>STANDARD</span>}
+                </div>
+                <div style={styles.presetMeta}>
+                  <b>{p.aircraft}</b> · {p.cabin}
+                </div>
+                <div style={styles.presetProduct}>
+                  {p.productName}{p.since ? <span style={styles.since}> · {p.since}</span> : null}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div style={styles.divider} />
+
           <div style={styles.cardTitle}>Search</div>
 
           <div style={styles.grid}>
@@ -355,39 +464,6 @@ export default function Page() {
             </Field>
           </div>
 
-          {/* Paste helper */}
-          <div style={styles.pasteBox}>
-            <div style={styles.tipTitle}>Paste aircraft from Google Flights (manual “auto”)</div>
-            <div style={styles.pasteRow}>
-              <input
-                value={pasteAircraft}
-                onChange={(e) => setPasteAircraft(e.target.value)}
-                style={{ ...styles.input, flex: 1 }}
-                placeholder='Paste anything like: "LH 359" or "ANA 77W" or "Airbus A350-900"'
-              />
-              <button style={{ ...styles.btn, ...styles.btnAccent, width: 160 }} onClick={applyPastedAircraft} disabled={!pasteAircraft.trim()}>
-                Apply
-              </button>
-            </div>
-            <div style={styles.tipSub}>This avoids scraping. The app normalizes to keys used by AeroLOPA/SeatMaps.</div>
-          </div>
-
-          {suggestedAircraft.length > 0 && (
-            <div style={styles.tipBox}>
-              <div style={styles.tipTitle}>
-                Suggested aircraft for <b>{routeKey}</b> / <b>{airlineKey}</b>
-              </div>
-              <div style={styles.pills}>
-                {suggestedAircraft.map((a) => (
-                  <button key={a} style={styles.pill} onClick={() => setAircraft(a)}>
-                    {a}
-                  </button>
-                ))}
-              </div>
-              <div style={styles.tipSub}>Click to autofill aircraft.</div>
-            </div>
-          )}
-
           <div style={styles.actions}>
             <a href={aerolopaUrl} target="_blank" rel="noreferrer">
               <button style={{ ...styles.btn, ...styles.btnPrimary }} disabled={!hasRequired}>
@@ -411,17 +487,16 @@ export default function Page() {
               style={{ ...styles.btn, ...styles.btnAccent }}
               disabled={!hasRequired}
               onClick={() => {
-                if (!product) {
-                  alert(`No product entry for ${airlineKey} / ${cabin} / ${aircraftKey}. Add it in LATEST_PRODUCTS.`);
+                if (!selectedPreset) {
+                  alert("No matching preset for this exact combination.\n\nTip: pick a preset first or add one to PRESETS.");
                   return;
                 }
-                const points = product.sellingPoints?.length ? `\n\nSelling points:\n- ${product.sellingPoints.join("\n- ")}` : "";
+                const bullet = selectedPreset.highlights.map((h) => `- ${h}`).join("\n");
                 alert(
-                  `${airlineKey} — ${cabin}\nRoute: ${routeKey}\nAircraft: ${aircraftKey}\n\n` +
-                    `Product: ${product.name}${product.isNew ? " (NEW)" : ""}\n` +
-                    (product.since ? `Since: ${product.since}\n` : "") +
-                    (product.notes ? `Notes: ${product.notes}\n` : "") +
-                    points
+                  `${selectedPreset.airline} · ${selectedPreset.route} · ${selectedPreset.aircraft} · ${selectedPreset.cabin}\n\n` +
+                    `Product: ${selectedPreset.productName}${selectedPreset.isNew ? " (NEW)" : ""}\n` +
+                    (selectedPreset.since ? `Since: ${selectedPreset.since}\n\n` : "\n") +
+                    `Selling points:\n${bullet}`
                 );
               }}
             >
@@ -431,26 +506,21 @@ export default function Page() {
 
           <div style={styles.productStrip}>
             <div>
-              <div style={styles.kvTitle}>Key used for direct links</div>
-              <div style={styles.kvValue}>{hasRequired ? directKey : <span style={{ color: "#777" }}>Fill airline, route, aircraft</span>}</div>
+              <div style={styles.kvTitle}>Selection</div>
+              <div style={styles.kvValue}>
+                {hasRequired ? `${airlineKey} · ${routeKey} · ${aircraftKey} · ${cabin}` : <span style={{ color: "#777" }}>Fill airline, route, aircraft</span>}
+              </div>
               <div style={styles.debugLine}>
                 AeroLOPA: <b>{aerolopaMode}</b> · SeatMaps: <b>{seatmapsMode}</b>
               </div>
-              <button
-                style={{ ...styles.mini, ...styles.miniGhost, marginTop: 10 }}
-                onClick={() => copyPitch(product, airlineKey)}
-                disabled={!hasRequired}
-              >
-                Copy pitch
-              </button>
             </div>
 
             <div style={{ textAlign: "right" }}>
-              <div style={styles.kvTitle}>Product</div>
+              <div style={styles.kvTitle}>Recommended product</div>
               <div style={styles.kvValue}>
-                {product ? (
+                {selectedPreset ? (
                   <>
-                    {product.name} {product.isNew && <span style={styles.newTag}>NEW</span>}
+                    {selectedPreset.productName} {selectedPreset.isNew && <span style={styles.newTag}>NEW</span>}
                   </>
                 ) : (
                   <span style={{ color: "#777" }}>—</span>
@@ -460,11 +530,11 @@ export default function Page() {
           </div>
         </section>
 
-        {/* Compare */}
+        {/* RIGHT: Compare */}
         <section style={styles.card}>
           <div style={styles.cardTitle}>Compare options</div>
           <div style={styles.small}>
-            Shows product details + direct/search status. (Route “recency” is handled by your paste-from-Google-Flights input above.)
+            Select airlines — buttons open the seat plan / seat map / images using the same route + aircraft + cabin you entered.
           </div>
 
           <div style={styles.comparePicker}>
@@ -480,20 +550,20 @@ export default function Page() {
             {compareCards.map((c) => (
               <div key={c.airline} style={styles.compareCard}>
                 <div style={styles.compareHeader}>
-                  <div style={styles.compareTitle}>{prettyAirline(c.airline)}</div>
-                  {c.product?.isNew && <span style={styles.newTag}>NEW</span>}
+                  <div style={styles.compareTitle}>{c.airlineLabel}</div>
+                  {c.isNew && <span style={styles.newTag}>NEW</span>}
                 </div>
 
                 <div style={styles.small}>
                   <b>Route:</b> {routeKey || "—"} <br />
-                  <b>Aircraft:</b> {hasRequired ? aircraftKey : "—"} · <b>Cabin:</b> {cabin}
+                  <b>Aircraft:</b> {aircraftKey || "—"} · <b>Cabin:</b> {cabin}
                   <br />
-                  <b>Product:</b> {c.product ? `${c.product.name}${c.product.since ? ` · ${c.product.since}` : ""}` : "—"}
+                  <b>Product:</b> {c.productName}{c.since ? ` · ${c.since}` : ""}
                 </div>
 
-                {c.product?.sellingPoints?.length ? (
+                {c.highlights.length ? (
                   <ul style={styles.bullets}>
-                    {c.product.sellingPoints.slice(0, 3).map((s) => (
+                    {c.highlights.slice(0, 3).map((s) => (
                       <li key={s}>{s}</li>
                     ))}
                   </ul>
@@ -525,7 +595,7 @@ export default function Page() {
           </div>
 
           <div style={styles.tipSub}>
-            If something shows <b>Search</b>, add a direct mapping in <b>AEROLOPA_URLS</b> / <b>SEATMAPS_URLS</b>.
+            If you want every result to be <b>Direct</b>, add more mappings in <b>AEROLOPA_URLS</b> and <b>SEATMAPS_URLS</b>.
           </div>
         </section>
       </div>
@@ -542,9 +612,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/* ===========================
+/* =========================================================
    STYLES
-   =========================== */
+   ========================================================= */
 
 const styles: Record<string, React.CSSProperties> = {
   page: { maxWidth: 1180, margin: "28px auto", padding: "0 16px 32px", fontFamily: "system-ui" },
@@ -571,27 +641,36 @@ const styles: Record<string, React.CSSProperties> = {
 
   rightPill: { border: "1px solid #eee", borderRadius: 999, padding: "8px 12px", background: "white", color: "#444", fontSize: 13 },
 
-  layout: { display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 14, alignItems: "start" },
+  layout: { display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 14, alignItems: "start" },
   card: { border: "1px solid #eee", borderRadius: 18, padding: 16, background: "white", boxShadow: "0 10px 30px rgba(0,0,0,0.06)" },
 
   cardTitle: { fontWeight: 900, marginBottom: 10, fontSize: 16 },
 
-  grid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 },
+  small: { color: "#666", fontSize: 13, lineHeight: 1.45 },
+
+  presetGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginTop: 10 },
+  presetCard: {
+    textAlign: "left",
+    border: "1px solid #eee",
+    background: "#fafafa",
+    borderRadius: 16,
+    padding: 12,
+    cursor: "pointer",
+  },
+  presetTop: { display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" },
+  presetTitle: { fontWeight: 900 },
+  presetMeta: { marginTop: 6, color: "#222", fontSize: 13 },
+  presetProduct: { marginTop: 6, color: "#444", fontSize: 13, fontWeight: 800 },
+  since: { fontWeight: 700, color: "#666" },
+
+  divider: { height: 1, background: "#eee", margin: "14px 0" },
+
+  grid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 8 },
 
   label: { display: "flex", flexDirection: "column", gap: 6 },
   labelText: { fontSize: 12, color: "#444" },
 
   input: { padding: 10, borderRadius: 12, border: "1px solid #ddd", fontSize: 14, outline: "none", background: "white" },
-
-  pasteBox: { border: "1px solid #eee", borderRadius: 14, padding: 12, marginTop: 12, background: "#fafafa" },
-  pasteRow: { display: "flex", gap: 10, alignItems: "center", marginTop: 8 },
-
-  tipBox: { border: "1px solid #eee", borderRadius: 14, padding: 12, marginTop: 12, background: "#fafafa" },
-  tipTitle: { fontWeight: 900, marginBottom: 6 },
-  tipSub: { color: "#777", fontSize: 12, marginTop: 8 },
-
-  pills: { display: "flex", gap: 8, flexWrap: "wrap" },
-  pill: { padding: "6px 10px", borderRadius: 999, border: "1px solid #ddd", background: "white", cursor: "pointer", fontSize: 12 },
 
   actions: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 },
 
@@ -628,12 +707,29 @@ const styles: Record<string, React.CSSProperties> = {
 
   kvTitle: { fontSize: 12, color: "#666", fontWeight: 800 },
   kvValue: { marginTop: 2, fontWeight: 900, color: "#111" },
-
   debugLine: { marginTop: 6, fontSize: 12, color: "#666" },
 
-  newTag: { display: "inline-block", marginLeft: 8, padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd", fontSize: 12, background: "white", fontWeight: 900 },
+  newTag: {
+    display: "inline-block",
+    padding: "2px 8px",
+    borderRadius: 999,
+    border: "1px solid rgba(0,0,0,0.08)",
+    fontSize: 12,
+    background: "white",
+    fontWeight: 900,
+  },
+  oldTag: {
+    display: "inline-block",
+    padding: "2px 8px",
+    borderRadius: 999,
+    border: "1px solid rgba(0,0,0,0.08)",
+    fontSize: 12,
+    background: "white",
+    fontWeight: 900,
+    color: "#666",
+  },
 
-  small: { color: "#666", fontSize: 13, lineHeight: 1.45 },
+  tipSub: { color: "#777", fontSize: 12, marginTop: 10 },
 
   comparePicker: { display: "flex", gap: 10, flexWrap: "wrap", margin: "10px 0 12px" },
   check: { display: "flex", gap: 6, alignItems: "center", border: "1px solid #eee", borderRadius: 999, padding: "6px 10px", background: "#fafafa" },
