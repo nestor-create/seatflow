@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 
 /* =========================================================
-   OPTIONAL DIRECT LINKS (better if mapped)
-   Key format: "AIRLINE|AIRCRAFT" (normalized)
+   OPTIONAL DIRECT LINKS (better when mapped)
+   Key format: "AIRLINE|AIRCRAFT"
    ========================================================= */
 
 const SEATMAPS_URLS: Record<string, string> = {
@@ -29,7 +29,7 @@ const AEROLOPA_URLS: Record<string, string> = {
 };
 
 /* =========================================================
-   TOP 10 AIRLINES (Compare)
+   TOP 10 AIRLINES
    ========================================================= */
 
 const TOP_AIRLINES: { code: string; name: string }[] = [
@@ -47,24 +47,23 @@ const TOP_AIRLINES: { code: string; name: string }[] = [
 
 type Cabin = "Economy" | "Premium Economy" | "Business" | "First";
 
-/* =========================================================
-   PRODUCT DATASET (manual)
-   - Works for ALL top 10 airlines
-   - aircraftHints: optional strings (if aircraft includes any hint, we prefer this product)
-   ========================================================= */
-
 type Product = {
   airline: string;
   cabin: Cabin;
   name: string;
   isNew?: boolean;
   since?: string;
-  positioning: string; // short headline
-  clientPitch: string; // client-facing pitch
-  proofPoints: string[]; // bullets to sell
-  notes?: string; // internal note
-  aircraftHints?: string[]; // e.g., ["777-300ER", "77W"]
+  positioning: string;
+  clientPitch: string;
+  proofPoints: string[];
+  notes?: string;
+  aircraftHints?: string[];
+  priority?: number;
 };
+
+/* =========================================================
+   PRODUCTS — aircraft-aware rules for top 10 airlines
+   ========================================================= */
 
 const PRODUCTS: Product[] = [
   // LH
@@ -79,10 +78,26 @@ const PRODUCTS: Product[] = [
       "If you want the most modern Lufthansa Business experience, Allegris is the one to target — it’s the clearest ‘new cabin’ upgrade when the operating aircraft matches.",
     proofPoints: [
       "Strong ‘new product’ story vs older cabins.",
-      "Better overall premium feel for long flights (configuration dependent).",
-      "We’ll confirm the exact cabin layout using seat plan + seat map before you commit.",
+      "More premium feel for long-haul comfort (layout dependent).",
+      "We’ll confirm the exact configuration via seat plan + seat map before you commit.",
     ],
-    notes: "Not on every route/aircraft — always verify via seat plan/seat map.",
+    notes: "Not on every route/aircraft — always verify on the exact flight/date.",
+    aircraftHints: ["A350-900", "A350-1000", "787-9", "777-9", "A359", "A35K", "789"],
+    priority: 100,
+  },
+  {
+    airline: "LH",
+    cabin: "Business",
+    name: "Lufthansa Business (standard)",
+    positioning: "Strong schedule-led option when Allegris isn’t operating",
+    clientPitch:
+      "This is a strong Lufthansa option for the route — we’ll confirm the exact seat layout on the operating aircraft so expectations match the cabin on the day.",
+    proofPoints: [
+      "Great when schedule and pricing are the best fit.",
+      "Seat map verification reduces surprises.",
+      "We can optimize seat selection once aircraft is confirmed.",
+    ],
+    priority: 10,
   },
 
   // NH
@@ -91,17 +106,32 @@ const PRODUCTS: Product[] = [
     cabin: "Business",
     name: "The Room",
     isNew: true,
-    since: "Flagship product (aircraft-dependent)",
+    since: "Flagship (aircraft-dependent)",
     positioning: "One of the most spacious Business Class seats when operating",
     clientPitch:
       "ANA ‘The Room’ is a standout pick — when it’s on the flight, it’s a flagship-level experience with a spacious, suite-like feel that’s excellent for sleep and comfort.",
     proofPoints: [
-      "Premium ‘flagship’ story that clients immediately understand.",
-      "Great for comfort + privacy narrative.",
-      "We’ll verify that the operating aircraft is the right configuration before booking.",
+      "Premium ‘flagship’ story clients understand instantly.",
+      "Excellent comfort + privacy narrative.",
+      "We’ll verify the configuration before booking.",
     ],
-    notes: "Aircraft/config dependent. Use seat map confirmation.",
+    notes: "Typically on select 777-300ER configurations; confirm via seat map.",
     aircraftHints: ["777-300ER", "77W", "773"],
+    priority: 100,
+  },
+  {
+    airline: "NH",
+    cabin: "Business",
+    name: "ANA Business (standard)",
+    positioning: "Reliable premium choice when The Room isn’t operating",
+    clientPitch:
+      "A strong ANA option — we’ll confirm the exact seat layout on the operating aircraft so the experience matches what you’re expecting.",
+    proofPoints: [
+      "Quality premium positioning.",
+      "Seat map confirmation for your exact flight.",
+      "Strong comparison option on route/price tradeoffs.",
+    ],
+    priority: 10,
   },
 
   // BA
@@ -110,16 +140,28 @@ const PRODUCTS: Product[] = [
     cabin: "Business",
     name: "Club Suite",
     isNew: true,
-    since: "Newer BA Business (aircraft-dependent)",
+    since: "Aircraft-dependent",
     positioning: "BA’s modern Business Class with a more premium feel",
     clientPitch:
       "When British Airways is operating Club Suite, it’s the best BA Business option to go for — a noticeably more premium experience versus older BA business layouts.",
     proofPoints: [
       "Clear ‘upgrade’ story vs legacy BA business.",
-      "Strong privacy + overnight comfort positioning.",
-      "We’ll confirm the configuration on your exact flight before you commit.",
+      "Better privacy and overnight comfort narrative.",
+      "We’ll confirm configuration on your exact flight before you commit.",
     ],
-    notes: "Aircraft-dependent; verify with seat plan/seat map.",
+    notes: "Aircraft-dependent; verify via seat plan/map.",
+    aircraftHints: ["A350-1000", "787-10", "7810", "777-300ER", "777"],
+    priority: 100,
+  },
+  {
+    airline: "BA",
+    cabin: "Business",
+    name: "BA Business (legacy)",
+    positioning: "Schedule-led choice when Club Suite isn’t operating",
+    clientPitch:
+      "A workable premium option when timing is the priority — we’ll confirm the aircraft and seat layout so expectations match the cabin.",
+    proofPoints: ["Best for schedule fit.", "Seat map confirmation for the exact product.", "Useful value comparison vs other J options."],
+    priority: 10,
   },
 
   // QR
@@ -128,16 +170,28 @@ const PRODUCTS: Product[] = [
     cabin: "Business",
     name: "Qsuite",
     isNew: true,
-    since: "Flagship product (aircraft-dependent)",
+    since: "Aircraft-dependent",
     positioning: "Benchmark Business Class when available",
     clientPitch:
-      "Qsuite is a strong premium recommendation — when it’s on the aircraft, it’s one of the most compelling Business Class products to sell on comfort, privacy, and overall experience.",
+      "Qsuite is a premium recommendation — when it’s on the aircraft, it’s one of the most compelling Business Class products to sell on comfort, privacy and overall experience.",
     proofPoints: [
-      "Top-tier reputation as a flagship business product.",
-      "Excellent premium positioning vs typical business cabins.",
-      "We’ll confirm Qsuite availability on the exact flight using the seat map.",
+      "Flagship positioning with strong premium reputation.",
+      "Great comfort + privacy narrative.",
+      "We’ll confirm Qsuite availability on the exact flight.",
     ],
-    notes: "Not on every aircraft; always verify.",
+    notes: "Not on every aircraft; verify using seat map.",
+    aircraftHints: ["A350-1000", "777-300ER", "787-9", "77W", "789"],
+    priority: 100,
+  },
+  {
+    airline: "QR",
+    cabin: "Business",
+    name: "Qatar Business (standard)",
+    positioning: "Strong premium choice even when Qsuite isn’t operating",
+    clientPitch:
+      "A strong Qatar option — we’ll verify the exact seat layout on the operating aircraft so the experience matches the expectation before booking.",
+    proofPoints: ["Premium brand perception.", "Seat map verification.", "Solid comparison vs other long-haul business options."],
+    priority: 10,
   },
 
   // SQ
@@ -145,15 +199,12 @@ const PRODUCTS: Product[] = [
     airline: "SQ",
     cabin: "Business",
     name: "Singapore Airlines Business",
-    since: "Long-haul premium baseline",
     positioning: "A highly reliable premium choice with strong brand pull",
     clientPitch:
       "Singapore Airlines is an easy premium recommendation — a strong, consistent experience that tends to land well with clients who prioritize quality and reliability.",
-    proofPoints: [
-      "Great ‘safe premium’ recommendation for discerning travelers.",
-      "Strong brand perception and service story.",
-      "We’ll confirm the exact cabin configuration via the seat map for confidence.",
-    ],
+    proofPoints: ["Strong premium perception.", "Consistency story.", "We’ll confirm exact seat map for your flight."],
+    aircraftHints: ["A350-900", "777-300ER", "787-10", "7810", "77W"],
+    priority: 50,
   },
 
   // EK
@@ -161,30 +212,25 @@ const PRODUCTS: Product[] = [
     airline: "EK",
     cabin: "First",
     name: "Emirates First (A380 when operating)",
-    since: "Iconic premium product (aircraft-dependent)",
+    isNew: true,
+    since: "Aircraft-dependent",
     positioning: "A statement First Class choice with major wow-factor",
     clientPitch:
-      "Emirates First is a standout for clients who want the journey to feel special — it’s the kind of premium option that’s memorable and easy to justify for the right trip.",
-    proofPoints: [
-      "Extremely strong ‘wow’ story for premium clients.",
-      "Aircraft type matters — we’ll confirm the operating aircraft before booking.",
-      "Great for special occasions, VIP travel, and high-value clients.",
-    ],
-    notes: "Best story when the operating aircraft supports the intended experience; verify aircraft type.",
+      "Emirates First is a standout for clients who want the journey to feel special — it’s memorable, premium, and easy to justify for the right trip.",
+    proofPoints: ["Very strong ‘wow’ story.", "Aircraft matters — we confirm before booking.", "Excellent for VIP travel and special occasions."],
+    notes: "Best story on A380; confirm aircraft type.",
     aircraftHints: ["A380"],
+    priority: 100,
   },
   {
     airline: "EK",
     cabin: "Business",
     name: "Emirates Business",
-    positioning: "Strong premium brand with recognizable value",
+    positioning: "Premium brand-led choice with strong recognition",
     clientPitch:
       "Emirates Business is a strong option when you want a premium brand experience — we’ll verify the aircraft and seat layout so expectations match the cabin on the day.",
-    proofPoints: [
-      "Brand-led premium sell.",
-      "Aircraft/layout can vary — we confirm before booking.",
-      "Good comparison option against other business cabins on the route.",
-    ],
+    proofPoints: ["Brand-led premium sell.", "Layout varies — we confirm.", "Good comparison against other business cabins."],
+    priority: 20,
   },
 
   // AF
@@ -192,27 +238,24 @@ const PRODUCTS: Product[] = [
     airline: "AF",
     cabin: "First",
     name: "La Première",
-    positioning: "Ultra-premium, best-available positioning",
+    isNew: true,
+    since: "Route/aircraft dependent",
+    positioning: "Best-available positioning for top-tier travel",
     clientPitch:
       "If the goal is ‘best available’, La Première is the top-tier choice — rare, exclusive, and positioned for clients who want the highest-end experience.",
-    proofPoints: [
-      "Perfect for VIP travel or milestone trips.",
-      "Strong exclusivity narrative.",
-      "We’ll confirm cabin availability and aircraft before you commit.",
-    ],
+    proofPoints: ["Perfect for VIP travel.", "Strong exclusivity narrative.", "We confirm aircraft/cabin availability before you commit."],
+    aircraftHints: ["777-300ER", "77W", "773"],
+    priority: 100,
   },
   {
     airline: "AF",
     cabin: "Business",
     name: "Air France Business",
-    positioning: "A strong premium option with an elevated feel",
+    positioning: "Strong premium choice with a refined feel",
     clientPitch:
-      "Air France Business is a strong premium choice — we’ll confirm the exact seat layout for your flight so you know precisely what to expect before booking.",
-    proofPoints: [
-      "Premium positioning that works well for client-facing recommendations.",
-      "Seat layouts vary by aircraft — we verify for certainty.",
-      "Useful comparison against other business cabins on the same route.",
-    ],
+      "Air France Business is a strong premium option — we’ll confirm the exact seat layout for your flight so you know precisely what to expect before booking.",
+    proofPoints: ["Premium positioning.", "Layout varies — we verify.", "Solid comparison vs other business cabins."],
+    priority: 20,
   },
 
   // UA
@@ -220,14 +263,12 @@ const PRODUCTS: Product[] = [
     airline: "UA",
     cabin: "Business",
     name: "Polaris",
-    positioning: "A consistent long-haul Business Class baseline",
+    positioning: "Consistent long-haul Business baseline",
     clientPitch:
-      "United Polaris is a solid long-haul premium option — a straightforward recommendation when schedule, availability, or pricing makes it the best overall value.",
-    proofPoints: [
-      "Strong ‘reliable premium’ sell.",
-      "Great fallback vs routes without a clear flagship new product.",
-      "We’ll confirm the configuration via seat map for clarity.",
-    ],
+      "United Polaris is a solid long-haul premium option — an easy recommendation when timing, routing, and value make it the best overall choice.",
+    proofPoints: ["Reliable premium narrative.", "Great schedule/value-driven recommendation.", "We confirm configuration via seat map."],
+    aircraftHints: ["787-9", "777-300ER", "77W", "789"],
+    priority: 40,
   },
 
   // DL
@@ -235,14 +276,12 @@ const PRODUCTS: Product[] = [
     airline: "DL",
     cabin: "Business",
     name: "Delta One",
-    positioning: "Premium long-haul option with a strong overall experience",
+    positioning: "Premium long-haul option with strong overall experience",
     clientPitch:
-      "Delta One is a strong premium alternative — particularly when timing and availability line up, and you want an easy ‘quality’ recommendation for the route.",
-    proofPoints: [
-      "Good premium positioning against competitors on the route.",
-      "Aircraft/layout can vary — we confirm the exact cabin via seat map.",
-      "Strong option when the overall itinerary is the priority.",
-    ],
+      "Delta One is a strong premium alternative — especially when timing lines up and you want a clean, confident recommendation for the route.",
+    proofPoints: ["Strong premium positioning.", "Layout varies — we confirm.", "Great option when itinerary is the priority."],
+    aircraftHints: ["A350-900", "A330-900", "339", "359"],
+    priority: 40,
   },
 
   // AA
@@ -250,56 +289,45 @@ const PRODUCTS: Product[] = [
     airline: "AA",
     cabin: "Business",
     name: "Flagship Business",
-    positioning: "Competitive long-haul Business Class on key routes",
+    positioning: "Competitive long-haul Business on key routes",
     clientPitch:
       "American Flagship Business can be a great value premium pick — especially when availability and pricing are favorable versus other business options.",
-    proofPoints: [
-      "Strong comparison option on transoceanic routes.",
-      "Good value-driven premium story when priced well.",
-      "We’ll verify the exact aircraft configuration using the seat map.",
-    ],
+    proofPoints: ["Strong comparison option.", "Good value-led premium story.", "We confirm the aircraft configuration via seat map."],
+    aircraftHints: ["777-300ER", "787-9", "77W", "789", "773"],
+    priority: 40,
   },
 
-  // Generic fallbacks (so auto-suggest ALWAYS shows something)
+  // Fallbacks (ensure always something exists once route+aircraft are entered)
   ...TOP_AIRLINES.flatMap((a) => ([
     {
       airline: a.code,
       cabin: "Economy" as Cabin,
       name: "Economy",
-      positioning: "A practical choice with the best value on the route",
+      positioning: "Best value and schedule fit on the route",
       clientPitch:
-        "This is a strong value option — we’ll prioritize the most comfortable seat selection available and confirm the aircraft layout so expectations match the journey.",
-      proofPoints: [
-        "Best for value and schedule fit.",
-        "We’ll help optimize seat selection once the aircraft is confirmed.",
-        "Seat map confirmation reduces surprises on the day.",
-      ],
+        "This is a strong value option — we’ll confirm the operating aircraft and help optimize seat selection so the journey matches the expectation.",
+      proofPoints: ["Best for value and timing.", "Seat map confirmation reduces surprises.", "We can optimize seat selection once aircraft is confirmed."],
+      priority: 1,
     },
     {
       airline: a.code,
       cabin: "Premium Economy" as Cabin,
       name: "Premium Economy",
-      positioning: "A comfort upgrade without the full Business price",
+      positioning: "Comfort upgrade without full Business pricing",
       clientPitch:
         "Premium Economy is often the sweet spot — noticeably more comfort and space, with a much gentler price point than Business.",
-      proofPoints: [
-        "Comfort upgrade story that clients understand instantly.",
-        "Great for longer flights where Economy feels tight.",
-        "We’ll confirm the seating layout via seat map for confidence.",
-      ],
+      proofPoints: ["Comfort upgrade story clients understand instantly.", "Great for long flights.", "Seat map confirmation for confidence."],
+      priority: 1,
     },
     {
       airline: a.code,
       cabin: "First" as Cabin,
       name: "First Class",
-      positioning: "Top-tier cabin when available on the route",
+      positioning: "Best-available cabin when operating on the route",
       clientPitch:
-        "If First is operating on this route, it’s the ‘best available’ option — we’ll confirm the exact aircraft and seat layout so the experience matches the expectation.",
-      proofPoints: [
-        "Strong premium positioning when available.",
-        "Aircraft matters — we verify before committing.",
-        "Ideal for VIP or milestone trips.",
-      ],
+        "If First is operating, it’s the ‘best available’ option — we’ll confirm the exact aircraft and layout so the experience matches expectations before booking.",
+      proofPoints: ["Top-tier positioning when available.", "Aircraft matters — we verify.", "Ideal for VIP or milestone trips."],
+      priority: 1,
     },
   ])),
 ];
@@ -324,6 +352,8 @@ function normalizeAircraft(input: string) {
   if (x === "351" || x === "A351" || x === "35K" || x === "A35K") return "A350-1000";
   if (x === "77W" || x === "B77W" || x === "773" || x === "B773") return "777-300ER";
   if (x === "789" || x === "B789") return "787-9";
+  if (x === "7810" || x === "B7810") return "787-10";
+  if (x === "339" || x === "A339") return "A330-900";
   if (x === "380" || x === "A380-800" || x === "A380800") return "A380";
 
   x = x.replace(/^B(\d)/, "$1");
@@ -333,6 +363,8 @@ function normalizeAircraft(input: string) {
   if (x === "777-300" || x === "777300") return "777-300ER";
   x = x.replace(/^777-?300ER$/, "777-300ER");
   x = x.replace(/^787-?9$/, "787-9");
+  x = x.replace(/^787-?10$/, "787-10");
+  x = x.replace(/^A330-?900$/, "A330-900");
 
   return x;
 }
@@ -344,9 +376,7 @@ function buildSearchQuery(airline: string, route: string, aircraft: string, cabi
     aircraft && `aircraft ${aircraft}`,
     cabin && `cabin ${cabin}`,
     "seat map",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter(Boolean).join(" ");
   return encodeURIComponent(parts);
 }
 
@@ -355,30 +385,29 @@ function prettyAirline(code: string) {
   return found ? `${found.code} · ${found.name}` : code;
 }
 
-/** Auto-pick logic:
- * 1) Match airline + cabin + aircraftHints (best)
- * 2) Match airline + cabin (fallback)
- */
+function isValidRoute(routeKey: string) {
+  return /^[A-Z]{3}-[A-Z]{3}$/.test(routeKey);
+}
+
 function findProductAuto(airline: string, cabin: Cabin, aircraftKey: string) {
   const a = normalizeAirline(airline);
   const candidates = PRODUCTS.filter((p) => p.airline === a && p.cabin === cabin);
+  if (!candidates.length) return null;
 
-  // Prefer aircraft-hinted products when aircraft is present
-  if (aircraftKey && candidates.length) {
-    const hinted = candidates.find((p) => (p.aircraftHints || []).some((h) => aircraftKey.includes(h)));
-    if (hinted) return hinted;
-  }
+  const scored = candidates.map((p) => {
+    const pr = p.priority ?? 0;
+    const hinted =
+      aircraftKey && p.aircraftHints && p.aircraftHints.some((h) => aircraftKey.includes(h)) ? 1000 : 0;
+    const newest = p.isNew ? 50 : 0;
+    return { p, score: pr + hinted + newest };
+  });
 
-  // Prefer "isNew" product for that airline+cabin if present
-  const newest = candidates.find((p) => p.isNew);
-  if (newest) return newest;
-
-  // Any candidate
-  return candidates[0] ?? null;
+  scored.sort((x, y) => y.score - x.score);
+  return scored[0].p;
 }
 
 /* =========================================================
-   Icons (SeatMaps + Images)
+   Icons
    ========================================================= */
 
 function Icon({ children }: { children: React.ReactNode }) {
@@ -443,15 +472,15 @@ export default function Page() {
   const routeKey = useMemo(() => normalizeRoute(route), [route]);
   const aircraftKey = useMemo(() => normalizeAircraft(aircraft), [aircraft]);
 
-  // Auto suggestion triggers as soon as airline exists
-  const hasSuggest = airlineKey.length > 0;
+  const routeOk = useMemo(() => isValidRoute(routeKey), [routeKey]);
+
+  // ✅ Only suggest when airline + valid route + aircraft present
+  const hasSuggest = airlineKey.length > 0 && routeOk && aircraftKey.length > 0;
+
   const suggestedProduct = useMemo(
     () => (hasSuggest ? findProductAuto(airlineKey, cabin, aircraftKey) : null),
     [hasSuggest, airlineKey, cabin, aircraftKey]
   );
-
-  // Links become more useful if route or aircraft exist
-  const hasLinks = airlineKey.length > 0 && (routeKey.length > 0 || aircraftKey.length > 0);
 
   const key = `${airlineKey}|${aircraftKey}`;
   const searchQ = useMemo(() => buildSearchQuery(airlineKey, routeKey, aircraftKey, cabin), [airlineKey, routeKey, aircraftKey, cabin]);
@@ -466,63 +495,57 @@ export default function Page() {
       ? SEATMAPS_URLS[key]
       : `https://seatmaps.com/search/?q=${searchQ}`;
 
-  const imageUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${airlineKey} ${aircraftKey || ""} ${cabin} cabin`)}`;
+  const imageUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${airlineKey} ${aircraftKey} ${cabin} cabin`)}`;
+
+  function toggleCompare(code: string) {
+    setCompare((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]));
+  }
+
+  async function copyPitch() {
+    const header = `${airlineKey} · ${routeKey} · ${aircraftKey} · ${cabin}`;
+    const p = suggestedProduct;
+
+    const text = p
+      ? [
+          header,
+          "",
+          `Recommended product: ${p.name}${p.isNew ? " (NEW)" : ""}${p.since ? ` · ${p.since}` : ""}`,
+          `Positioning: ${p.positioning}`,
+          "",
+          "Client pitch:",
+          p.clientPitch,
+          "",
+          "Why it stands out:",
+          ...p.proofPoints.map((x) => `- ${x}`),
+        ].join("\n")
+      : [
+          header,
+          "",
+          "Client pitch:",
+          "This is a strong option — we’ll confirm the operating aircraft and seat layout so expectations match the cabin before booking.",
+        ].join("\n");
+
+    await navigator.clipboard.writeText(text);
+    alert("Client pitch copied ✅");
+  }
 
   const compareCards = useMemo(() => {
     return compare.map((code) => {
       const a = normalizeAirline(code);
       const ck = `${a}|${aircraftKey}`;
       const q = buildSearchQuery(a, routeKey, aircraftKey, cabin);
-
-      const prod = findProductAuto(a, cabin, aircraftKey);
+      const prod = hasSuggest ? findProductAuto(a, cabin, aircraftKey) : null;
 
       return {
         airline: a,
         airlineLabel: prettyAirline(a),
         aerolopaUrl: aircraftKey && AEROLOPA_URLS[ck] ? AEROLOPA_URLS[ck] : `https://www.aerolopa.com/search?query=${q}`,
         seatmapsUrl: aircraftKey && SEATMAPS_URLS[ck] ? SEATMAPS_URLS[ck] : `https://seatmaps.com/search/?q=${q}`,
-        imageUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey || ""} ${cabin} cabin`)}`,
+        imageUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey} ${cabin} cabin`)}`,
         product: prod,
       };
     });
-  }, [compare, routeKey, cabin, aircraftKey]);
-
-  function toggleCompare(code: string) {
-    setCompare((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]));
-  }
-
-  function clientPitchText(airlineCode: string, prod: Product | null) {
-    const header = `${airlineCode}${routeKey ? ` · ${routeKey}` : ""}${aircraftKey ? ` · ${aircraftKey}` : ""} · ${cabin}`;
-
-    if (!prod) {
-      return [
-        header,
-        "",
-        "Client pitch:",
-        "This is a strong option for the route — we’ll confirm the exact seat layout on the operating aircraft so you know precisely what to expect before booking.",
-      ].join("\n");
-    }
-
-    return [
-      header,
-      "",
-      `Recommended product: ${prod.name}${prod.isNew ? " (NEW)" : ""}${prod.since ? ` · ${prod.since}` : ""}`,
-      `Positioning: ${prod.positioning}`,
-      "",
-      "Client pitch:",
-      prod.clientPitch,
-      "",
-      "Why it stands out:",
-      ...prod.proofPoints.map((p) => `- ${p}`),
-      prod.notes ? `\nInternal note: ${prod.notes}` : "",
-    ].filter(Boolean).join("\n");
-  }
-
-  async function copyPitch() {
-    const text = clientPitchText(airlineKey || "—", suggestedProduct);
-    await navigator.clipboard.writeText(text);
-    alert("Client pitch copied ✅");
-  }
+  }, [compare, routeKey, cabin, aircraftKey, hasSuggest]);
 
   return (
     <main style={styles.page}>
@@ -537,16 +560,15 @@ export default function Page() {
           <div>
             <h1 style={styles.h1}>Ascend Seat Image & Map Project</h1>
             <div style={styles.sub}>
-              Enter airline + route + aircraft to open seat plan, seat map and images — plus an automatic client-ready product pitch.
+              Auto-suggest appears only after you enter a valid route (AAA-BBB) and aircraft.
             </div>
           </div>
         </div>
 
-        <div style={styles.rightPill}>Auto product suggestion · Client-ready pitch</div>
+        <div style={styles.rightPill}>Route + aircraft gated · Client-ready pitch</div>
       </div>
 
       <div style={styles.layout}>
-        {/* SEARCH */}
         <section style={styles.card}>
           <div style={styles.cardTitle}>Search</div>
 
@@ -557,10 +579,13 @@ export default function Page() {
 
             <Field label="Route (AAA-BBB)">
               <input value={route} onChange={(e) => setRoute(e.target.value)} style={styles.input} placeholder="e.g. JFK-LHR" />
+              <div style={{ marginTop: 6, fontSize: 12, color: routeKey.length === 0 ? "#777" : (routeOk ? "#0a7" : "#b00") }}>
+                {routeKey.length === 0 ? "Example format: JFK-LHR" : routeOk ? "Route looks good ✅" : "Route format should be AAA-BBB"}
+              </div>
             </Field>
 
             <Field label="Aircraft">
-              <input value={aircraft} onChange={(e) => setAircraft(e.target.value)} style={styles.input} placeholder="e.g. A350-900 / 359 / 77W" />
+              <input value={aircraft} onChange={(e) => setAircraft(e.target.value)} style={styles.input} placeholder="e.g. A350-900 / 359 / 77W / 789" />
             </Field>
 
             <Field label="Cabin">
@@ -573,57 +598,42 @@ export default function Page() {
             </Field>
           </div>
 
-          {/* Buttons */}
           <div style={styles.actions}>
-            {/* AeroLOPA button with NO icon */}
-            <a href={aerolopaUrl} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnPrimary }} disabled={!hasLinks}>
+            <a href={`https://www.aerolopa.com/search?query=${searchQ}`} target="_blank" rel="noreferrer">
+              <button style={{ ...styles.btn, ...styles.btnPrimary }} disabled={!hasSuggest}>
                 AeroLOPA Seat Plan
               </button>
             </a>
 
-            <a href={seatmapsUrl} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnSecondary }} disabled={!hasLinks}>
+            <a href={`https://seatmaps.com/search/?q=${searchQ}`} target="_blank" rel="noreferrer">
+              <button style={{ ...styles.btn, ...styles.btnSecondary }} disabled={!hasSuggest}>
                 <SeatmapIcon /> SeatMaps
               </button>
             </a>
 
             <a href={imageUrl} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnGhost }} disabled={!hasLinks}>
+              <button style={{ ...styles.btn, ...styles.btnGhost }} disabled={!hasSuggest}>
                 <ImageIcon /> Aircraft Images
               </button>
             </a>
 
-            <button
-              style={{ ...styles.btn, ...styles.btnAccent }}
-              disabled={!hasSuggest}
-              onClick={() => alert(clientPitchText(airlineKey || "—", suggestedProduct))}
-            >
-              <SparkIcon /> Client pitch
+            <button style={{ ...styles.btn, ...styles.btnAccent }} disabled={!hasSuggest} onClick={copyPitch}>
+              <SparkIcon /> Copy client pitch
             </button>
           </div>
 
-          {/* AUTO PRODUCT STRIP */}
           <div style={styles.productStrip}>
             <div>
-              <div style={styles.kvTitle}>Your selection</div>
+              <div style={styles.kvTitle}>Auto-suggest status</div>
               <div style={styles.kvValue}>
-                {airlineKey
-                  ? `${airlineKey}${routeKey ? ` · ${routeKey}` : ""}${aircraftKey ? ` · ${aircraftKey}` : ""} · ${cabin}`
-                  : <span style={{ color: "#777" }}>Enter an airline to begin</span>}
-              </div>
-
-              <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button style={{ ...styles.mini, ...styles.miniGhost }} onClick={copyPitch} disabled={!hasSuggest}>
-                  Copy client pitch
-                </button>
+                {hasSuggest ? "Ready ✅" : "Enter Airline + valid Route + Aircraft to unlock suggestions"}
               </div>
             </div>
 
             <div style={{ textAlign: "right" }}>
-              <div style={styles.kvTitle}>Auto-suggested product</div>
+              <div style={styles.kvTitle}>Suggested product</div>
               <div style={styles.kvValue}>
-                {suggestedProduct ? (
+                {hasSuggest && suggestedProduct ? (
                   <>
                     {suggestedProduct.name} {suggestedProduct.isNew ? <span style={styles.newTag}>NEW</span> : null}
                   </>
@@ -634,38 +644,24 @@ export default function Page() {
             </div>
           </div>
 
-          {/* CLIENT PITCH PANEL */}
-          {hasSuggest ? (
+          {hasSuggest && suggestedProduct ? (
             <div style={styles.sellBox}>
               <div style={styles.sellTitle}>Client-ready pitch</div>
-
-              {suggestedProduct ? (
-                <>
-                  <div style={styles.pitchLine}><b>{suggestedProduct.positioning}</b></div>
-                  <div style={styles.pitchLine}>{suggestedProduct.clientPitch}</div>
-
-                  <div style={{ marginTop: 10 }}>
-                    <div style={styles.pitchLine}><b>Why it stands out:</b></div>
-                    <ul style={styles.bullets}>
-                      {suggestedProduct.proofPoints.map((s) => <li key={s}>{s}</li>)}
-                    </ul>
-                  </div>
-
-                  {suggestedProduct.notes ? <div style={styles.note}>Internal note: {suggestedProduct.notes}</div> : null}
-                </>
-              ) : (
-                <div style={styles.pitchLine}>
-                  Enter an airline and we’ll suggest the strongest product angle for that cabin.
-                </div>
-              )}
+              <div style={styles.pitchLine}><b>{suggestedProduct.positioning}</b></div>
+              <div style={styles.pitchLine}>{suggestedProduct.clientPitch}</div>
+              <div style={{ marginTop: 10 }}>
+                <div style={styles.pitchLine}><b>Why it stands out:</b></div>
+                <ul style={styles.bullets}>
+                  {suggestedProduct.proofPoints.map((s) => <li key={s}>{s}</li>)}
+                </ul>
+              </div>
             </div>
           ) : null}
         </section>
 
-        {/* COMPARE */}
         <section style={styles.card}>
           <div style={styles.cardTitle}>Compare options</div>
-          <div style={styles.small}>Pick airlines — each card shows a product angle + quick links using your route/aircraft.</div>
+          <div style={styles.small}>Compare unlocks once your route + aircraft are filled.</div>
 
           <div style={styles.comparePicker}>
             {TOP_AIRLINES.map((a) => (
@@ -688,30 +684,26 @@ export default function Page() {
                   <b>Route:</b> {routeKey || "—"} <br />
                   <b>Aircraft:</b> {aircraftKey || "—"} · <b>Cabin:</b> {cabin}
                   <br />
-                  <b>Product:</b> {c.product ? `${c.product.name}${c.product.since ? ` · ${c.product.since}` : ""}` : "—"}
+                  <b>Product:</b> {c.product ? c.product.name : "—"}
                 </div>
 
                 <div style={styles.comparePitch}>
-                  {c.product?.clientPitch ||
-                    "A strong option for the route — we’ll confirm the operating aircraft and seat layout so expectations match the cabin."}
+                  {c.product?.clientPitch || (hasSuggest ? "A strong option — we’ll confirm the aircraft and seat layout so expectations match the cabin." : "Fill route + aircraft to show pitch.")}
                 </div>
 
                 <div style={styles.actionsRow}>
-                  {/* no icon on AeroLOPA */}
                   <a href={c.aerolopaUrl} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniPrimary }} disabled={!hasLinks}>
+                    <button style={{ ...styles.mini, ...styles.miniPrimary }} disabled={!hasSuggest}>
                       Seat plan
                     </button>
                   </a>
-
                   <a href={c.seatmapsUrl} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniSecondary }} disabled={!hasLinks}>
+                    <button style={{ ...styles.mini, ...styles.miniSecondary }} disabled={!hasSuggest}>
                       <SeatmapIcon /> Seat map
                     </button>
                   </a>
-
                   <a href={c.imageUrl} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniGhost }} disabled={!hasLinks}>
+                    <button style={{ ...styles.mini, ...styles.miniGhost }} disabled={!hasSuggest}>
                       <ImageIcon /> Images
                     </button>
                   </a>
@@ -797,7 +789,6 @@ const styles: Record<string, React.CSSProperties> = {
   sellTitle: { fontWeight: 900, marginBottom: 6 },
 
   pitchLine: { marginBottom: 8, color: "#222", fontSize: 14, lineHeight: 1.55 },
-  note: { marginTop: 10, fontSize: 12, color: "#666" },
 
   comparePicker: { display: "flex", gap: 10, flexWrap: "wrap", margin: "10px 0 12px" },
   check: { display: "flex", gap: 6, alignItems: "center", border: "1px solid #eee", borderRadius: 999, padding: "6px 10px", background: "#fafafa" },
