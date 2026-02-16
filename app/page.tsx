@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react";
 
 /* ===========================
-   DATA (EDIT OVER TIME)
+   DIRECT LINKS (EDIT THESE)
+   Key format: "AIRLINE|AIRCRAFT"
+   AIRCRAFT normalized like:
+   A350-900, A350-1000, 777-300ER, 787-9, A380
    =========================== */
 
-// SeatMaps direct URLs
 const SEATMAPS_URLS: Record<string, string> = {
   "LH|A350-900": "https://seatmaps.com/airlines/lh-lufthansa/airbus-a350-900/",
   "NH|777-300ER": "https://seatmaps.com/airlines/nh-all-nippon-airways/boeing-777-300er/",
@@ -20,7 +22,6 @@ const SEATMAPS_URLS: Record<string, string> = {
   "DL|A350-900": "https://seatmaps.com/airlines/dl-delta/airbus-a350-900/",
 };
 
-// AeroLOPA direct URLs (best experience). Fallback goes to search.
 const AEROLOPA_URLS: Record<string, string> = {
   "LH|A350-900": "https://www.aerolopa.com/lh-359",
   "NH|777-300ER": "https://www.aerolopa.com/nh-773",
@@ -81,6 +82,7 @@ const LATEST_PRODUCTS: Product[] = [
   { airline: "UA", cabin: "Business", name: "Polaris", since: "2016+", isNew: false },
 ];
 
+/* Optional: route suggestions (manual) */
 const ROUTE_AIRCRAFT: Record<string, Partial<Record<string, string[]>>> = {
   "JFK-LHR": {
     BA: ["A350-1000", "777-300ER", "A380"],
@@ -94,44 +96,67 @@ const ROUTE_AIRCRAFT: Record<string, Partial<Record<string, string[]>>> = {
 };
 
 /* ===========================
-   HELPERS
+   NORMALIZATION
    =========================== */
 
 function normalizeAirline(v: string) {
   return (v || "").trim().toUpperCase();
 }
+
 function normalizeRoute(v: string) {
   return (v || "").trim().toUpperCase().replace(/\s+/g, "");
 }
-function normalizeAircraft(v: string) {
-  let x = (v || "").trim().toUpperCase();
-  x = x.replace(/^BOEING\s+/i, "");
+
+function normalizeAircraft(input: string) {
+  let x = (input || "").trim().toUpperCase();
   x = x.replace(/^AIRBUS\s+/i, "");
+  x = x.replace(/^BOEING\s+/i, "");
+  x = x.replace(/[_\s]+/g, "-");
+
+  // common short codes → canonical
+  if (x === "359" || x === "A359") return "A350-900";
+  if (x === "351" || x === "A351" || x === "35K" || x === "A35K") return "A350-1000";
+  if (x === "77W" || x === "B77W" || x === "773" || x === "B773") return "777-300ER";
+  if (x === "789" || x === "B789") return "787-9";
+  if (x === "380" || x === "A380-800" || x === "A380800") return "A380";
+
   x = x.replace(/^B(\d)/, "$1");
-  x = x.replace(/\s+/g, "-");
-  x = x.replace("A330-900", "A330-900NEO");
+  if (x.startsWith("A380")) return "A380";
+  x = x.replace(/^A350-?900$/, "A350-900");
+  x = x.replace(/^A350-?1000$/, "A350-1000");
+  if (x === "777-300" || x === "777300") return "777-300ER";
+  x = x.replace(/^777-?300ER$/, "777-300ER");
+  x = x.replace(/^787-?9$/, "787-9");
+
   return x;
 }
+
 function buildQuery({ airline, route, aircraft, cabin }: { airline: string; route: string; aircraft: string; cabin: string }) {
   const parts = [airline && `airline ${airline}`, route && `route ${route}`, aircraft && `aircraft ${aircraft}`, cabin && `cabin ${cabin}`]
     .filter(Boolean)
     .join(" ");
   return encodeURIComponent(parts);
 }
+
 function findLatestProduct(airline: string, cabin: Cabin, aircraft: string) {
   const a = normalizeAirline(airline);
   const ac = normalizeAircraft(aircraft);
-  const exact = LATEST_PRODUCTS.find((p) => p.airline === a && p.cabin === cabin && p.aircraft && normalizeAircraft(p.aircraft) === ac);
+
+  const exact = LATEST_PRODUCTS.find(
+    (p) => p.airline === a && p.cabin === cabin && p.aircraft && normalizeAircraft(p.aircraft) === ac
+  );
   if (exact) return exact;
+
   return LATEST_PRODUCTS.find((p) => p.airline === a && p.cabin === cabin && !p.aircraft) ?? null;
 }
+
 function prettyAirline(code: string) {
   const found = TOP_AIRLINES.find((a) => a.code === code);
   return found ? `${found.code} · ${found.name}` : code;
 }
 
 /* ===========================
-   ICONS (NO LIBS)
+   ICONS (no libs)
    =========================== */
 
 function Icon({ children }: { children: React.ReactNode }) {
@@ -183,19 +208,23 @@ function SparkIcon() {
    =========================== */
 
 export default function Page() {
-  // ✅ BLANK BY DEFAULT
   const [airline, setAirline] = useState("");
   const [route, setRoute] = useState("");
   const [aircraft, setAircraft] = useState("");
   const [cabin, setCabin] = useState<Cabin>("Business");
 
+  // Paste helper (from Google Flights / notes)
+  const [pasteAircraft, setPasteAircraft] = useState("");
+
   const [compare, setCompare] = useState<string[]>(["AA", "BA"]);
+  const [logoOk, setLogoOk] = useState(true);
 
   const airlineKey = useMemo(() => normalizeAirline(airline), [airline]);
   const routeKey = useMemo(() => normalizeRoute(route), [route]);
   const aircraftKey = useMemo(() => normalizeAircraft(aircraft), [aircraft]);
 
   const hasRequired = airlineKey.length > 0 && routeKey.length > 0 && aircraftKey.length > 0;
+  const directKey = `${airlineKey}|${aircraftKey}`;
 
   const suggestedAircraft = useMemo(() => {
     if (!routeKey || !airlineKey) return [];
@@ -209,32 +238,42 @@ export default function Page() {
     cabin,
   ]);
 
-  const directSeatmaps = SEATMAPS_URLS[`${airlineKey}|${aircraftKey}`];
-  const seatmaps = directSeatmaps ?? `https://seatmaps.com/search/?q=${query}`;
+  const directSeatmaps = SEATMAPS_URLS[directKey];
+  const seatmapsUrl = directSeatmaps ?? `https://seatmaps.com/search/?q=${query}`;
+  const seatmapsMode = directSeatmaps ? "Direct" : "Search";
 
-  const directAerolopa = AEROLOPA_URLS[`${airlineKey}|${aircraftKey}`];
-  const aerolopa = directAerolopa ?? `https://www.aerolopa.com/search?query=${query}`;
+  const directAerolopa = AEROLOPA_URLS[directKey];
+  const aerolopaUrl = directAerolopa ?? `https://www.aerolopa.com/search?query=${query}`;
+  const aerolopaMode = directAerolopa ? "Direct" : "Search";
 
-  const image = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${airlineKey} ${aircraftKey} ${cabin} seat`)}`;
+  const imageUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${airlineKey} ${aircraftKey} ${cabin} seat`)}`;
 
-  const product = useMemo(() => {
-    if (!hasRequired) return null;
-    return findLatestProduct(airlineKey, cabin, aircraftKey);
-  }, [airlineKey, cabin, aircraftKey, hasRequired]);
+  const product = useMemo(() => (hasRequired ? findLatestProduct(airlineKey, cabin, aircraftKey) : null), [
+    hasRequired,
+    airlineKey,
+    cabin,
+    aircraftKey,
+  ]);
 
   const compareCards = useMemo(() => {
     return compare.map((code) => {
       const a = normalizeAirline(code);
+      const ck = `${a}|${aircraftKey}`;
       const q = buildQuery({ airline: a, route: routeKey, aircraft: aircraftKey, cabin });
 
-      const smDirect = SEATMAPS_URLS[`${a}|${aircraftKey}`];
-      const alDirect = AEROLOPA_URLS[`${a}|${aircraftKey}`];
+      const smDirect = SEATMAPS_URLS[ck];
+      const alDirect = AEROLOPA_URLS[ck];
+
+      const seatmapsUrl2 = smDirect ?? `https://seatmaps.com/search/?q=${q}`;
+      const aerolopaUrl2 = alDirect ?? `https://www.aerolopa.com/search?query=${q}`;
 
       return {
         airline: a,
-        seatmaps: smDirect ?? `https://seatmaps.com/search/?q=${q}`,
-        aerolopa: alDirect ?? `https://www.aerolopa.com/search?query=${q}`,
-        image: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey} ${cabin} seat`)}`,
+        seatmapsUrl: seatmapsUrl2,
+        seatmapsMode: smDirect ? "Direct" : "Search",
+        aerolopaUrl: aerolopaUrl2,
+        aerolopaMode: alDirect ? "Direct" : "Search",
+        imageUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey} ${cabin} seat`)}`,
         product: hasRequired ? findLatestProduct(a, cabin, aircraftKey) : null,
       };
     });
@@ -244,14 +283,45 @@ export default function Page() {
     setCompare((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]));
   }
 
+  function applyPastedAircraft() {
+    // Example pastes:
+    // "LH 359", "Lufthansa A350-900", "ANA 77W"
+    const normalized = normalizeAircraft(pasteAircraft);
+    if (!normalized) return;
+    setAircraft(normalized);
+  }
+
+  function copyPitch(p: Product | null, a: string) {
+    const header = `${a} · ${cabin} · ${aircraftKey} · ${routeKey}`;
+    if (!p) {
+      navigator.clipboard.writeText(`${header}\nProduct: —\nSeat map: ${seatmapsUrl}\nAeroLOPA: ${aerolopaUrl}\nImages: ${imageUrl}`);
+      return;
+    }
+    const bullets = p.sellingPoints?.length ? p.sellingPoints.map((s) => `- ${s}`).join("\n") : "";
+    const text =
+      `${header}\n` +
+      `Product: ${p.name}${p.isNew ? " (NEW)" : ""}${p.since ? ` · Since ${p.since}` : ""}\n` +
+      (p.notes ? `Notes: ${p.notes}\n` : "") +
+      (bullets ? `Selling points:\n${bullets}\n` : "") +
+      `AeroLOPA: ${aerolopaUrl}\nSeatMaps: ${seatmapsUrl}\nImages: ${imageUrl}\n`;
+    navigator.clipboard.writeText(text);
+  }
+
   return (
     <main style={styles.page}>
       <div style={styles.header}>
         <div style={styles.brand}>
-          <img src="/ascend-logo.png" alt="Ascend" style={styles.logo} />
+          {logoOk ? (
+            <img src="/ascend-logo.png" alt="Ascend" style={styles.logo} onError={() => setLogoOk(false)} />
+          ) : (
+            <div style={styles.logoFallback}>A</div>
+          )}
+
           <div>
             <h1 style={styles.h1}>Ascend Seat Image & Map Project</h1>
-            <div style={styles.sub}>Enter airline + route + aircraft to open seat plans, maps and images — plus “new product” selling points.</div>
+            <div style={styles.sub}>
+              Manual for now. Later you can plug in a real data source — without scraping Google Flights.
+            </div>
           </div>
         </div>
         <div style={styles.rightPill}>No AI · Manual data</div>
@@ -272,7 +342,7 @@ export default function Page() {
             </Field>
 
             <Field label="Aircraft">
-              <input value={aircraft} onChange={(e) => setAircraft(e.target.value)} style={styles.input} placeholder="e.g. A350-900" />
+              <input value={aircraft} onChange={(e) => setAircraft(e.target.value)} style={styles.input} placeholder="e.g. A350-900 / 359 / 77W" />
             </Field>
 
             <Field label="Cabin">
@@ -283,6 +353,23 @@ export default function Page() {
                 <option>First</option>
               </select>
             </Field>
+          </div>
+
+          {/* Paste helper */}
+          <div style={styles.pasteBox}>
+            <div style={styles.tipTitle}>Paste aircraft from Google Flights (manual “auto”)</div>
+            <div style={styles.pasteRow}>
+              <input
+                value={pasteAircraft}
+                onChange={(e) => setPasteAircraft(e.target.value)}
+                style={{ ...styles.input, flex: 1 }}
+                placeholder='Paste anything like: "LH 359" or "ANA 77W" or "Airbus A350-900"'
+              />
+              <button style={{ ...styles.btn, ...styles.btnAccent, width: 160 }} onClick={applyPastedAircraft} disabled={!pasteAircraft.trim()}>
+                Apply
+              </button>
+            </div>
+            <div style={styles.tipSub}>This avoids scraping. The app normalizes to keys used by AeroLOPA/SeatMaps.</div>
           </div>
 
           {suggestedAircraft.length > 0 && (
@@ -297,24 +384,24 @@ export default function Page() {
                   </button>
                 ))}
               </div>
-              <div style={styles.tipSub}>Click to autofill Aircraft.</div>
+              <div style={styles.tipSub}>Click to autofill aircraft.</div>
             </div>
           )}
 
           <div style={styles.actions}>
-            <a href={aerolopa} target="_blank" rel="noreferrer">
+            <a href={aerolopaUrl} target="_blank" rel="noreferrer">
               <button style={{ ...styles.btn, ...styles.btnPrimary }} disabled={!hasRequired}>
-                <PlaneIcon /> AeroLOPA Seat Plan <span style={styles.muted}>({directAerolopa ? "Direct" : "Search"})</span>
+                <PlaneIcon /> AeroLOPA Seat Plan <span style={styles.muted}>({aerolopaMode})</span>
               </button>
             </a>
 
-            <a href={seatmaps} target="_blank" rel="noreferrer">
+            <a href={seatmapsUrl} target="_blank" rel="noreferrer">
               <button style={{ ...styles.btn, ...styles.btnSecondary }} disabled={!hasRequired}>
-                <MapIcon /> SeatMaps <span style={styles.muted}>({directSeatmaps ? "Direct" : "Search"})</span>
+                <MapIcon /> SeatMaps <span style={styles.muted}>({seatmapsMode})</span>
               </button>
             </a>
 
-            <a href={image} target="_blank" rel="noreferrer">
+            <a href={imageUrl} target="_blank" rel="noreferrer">
               <button style={{ ...styles.btn, ...styles.btnGhost }} disabled={!hasRequired}>
                 <SeatIcon /> Aircraft Images
               </button>
@@ -325,18 +412,15 @@ export default function Page() {
               disabled={!hasRequired}
               onClick={() => {
                 if (!product) {
-                  alert(`No product entry for ${airlineKey} / ${cabin} / ${aircraftKey}.\nAdd it in LATEST_PRODUCTS.`);
+                  alert(`No product entry for ${airlineKey} / ${cabin} / ${aircraftKey}. Add it in LATEST_PRODUCTS.`);
                   return;
                 }
                 const points = product.sellingPoints?.length ? `\n\nSelling points:\n- ${product.sellingPoints.join("\n- ")}` : "";
                 alert(
-                  `${airlineKey} — ${cabin}\n` +
-                    `Route: ${routeKey}\n` +
-                    `Aircraft: ${aircraftKey}\n` +
-                    `Product: ${product.name}\n` +
+                  `${airlineKey} — ${cabin}\nRoute: ${routeKey}\nAircraft: ${aircraftKey}\n\n` +
+                    `Product: ${product.name}${product.isNew ? " (NEW)" : ""}\n` +
                     (product.since ? `Since: ${product.since}\n` : "") +
-                    `Status: ${product.isNew ? "NEW" : "Not marked new"}\n` +
-                    (product.notes ? `Notes: ${product.notes}` : "") +
+                    (product.notes ? `Notes: ${product.notes}\n` : "") +
                     points
                 );
               }}
@@ -347,10 +431,18 @@ export default function Page() {
 
           <div style={styles.productStrip}>
             <div>
-              <div style={styles.kvTitle}>Current selection</div>
-              <div style={styles.kvValue}>
-                {hasRequired ? `${airlineKey} · ${routeKey} · ${aircraftKey} · ${cabin}` : <span style={{ color: "#777" }}>Fill airline, route, aircraft</span>}
+              <div style={styles.kvTitle}>Key used for direct links</div>
+              <div style={styles.kvValue}>{hasRequired ? directKey : <span style={{ color: "#777" }}>Fill airline, route, aircraft</span>}</div>
+              <div style={styles.debugLine}>
+                AeroLOPA: <b>{aerolopaMode}</b> · SeatMaps: <b>{seatmapsMode}</b>
               </div>
+              <button
+                style={{ ...styles.mini, ...styles.miniGhost, marginTop: 10 }}
+                onClick={() => copyPitch(product, airlineKey)}
+                disabled={!hasRequired}
+              >
+                Copy pitch
+              </button>
             </div>
 
             <div style={{ textAlign: "right" }}>
@@ -371,7 +463,9 @@ export default function Page() {
         {/* Compare */}
         <section style={styles.card}>
           <div style={styles.cardTitle}>Compare options</div>
-          <div style={styles.small}>Pick airlines and open their seat plan / map / images. (Uses your same route + aircraft.)</div>
+          <div style={styles.small}>
+            Shows product details + direct/search status. (Route “recency” is handled by your paste-from-Google-Flights input above.)
+          </div>
 
           <div style={styles.comparePicker}>
             {TOP_AIRLINES.map((a) => (
@@ -391,23 +485,36 @@ export default function Page() {
                 </div>
 
                 <div style={styles.small}>
+                  <b>Route:</b> {routeKey || "—"} <br />
                   <b>Aircraft:</b> {hasRequired ? aircraftKey : "—"} · <b>Cabin:</b> {cabin}
                   <br />
-                  <b>Product:</b> {c.product ? c.product.name : "—"}
+                  <b>Product:</b> {c.product ? `${c.product.name}${c.product.since ? ` · ${c.product.since}` : ""}` : "—"}
+                </div>
+
+                {c.product?.sellingPoints?.length ? (
+                  <ul style={styles.bullets}>
+                    {c.product.sellingPoints.slice(0, 3).map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                <div style={styles.compareMeta}>
+                  AeroLOPA: <b>{c.aerolopaMode}</b> · SeatMaps: <b>{c.seatmapsMode}</b>
                 </div>
 
                 <div style={styles.actionsRow}>
-                  <a href={c.aerolopa} target="_blank" rel="noreferrer">
+                  <a href={c.aerolopaUrl} target="_blank" rel="noreferrer">
                     <button style={{ ...styles.mini, ...styles.miniPrimary }} disabled={!hasRequired}>
                       <PlaneIcon /> AeroLOPA
                     </button>
                   </a>
-                  <a href={c.seatmaps} target="_blank" rel="noreferrer">
+                  <a href={c.seatmapsUrl} target="_blank" rel="noreferrer">
                     <button style={{ ...styles.mini, ...styles.miniSecondary }} disabled={!hasRequired}>
                       <MapIcon /> SeatMaps
                     </button>
                   </a>
-                  <a href={c.image} target="_blank" rel="noreferrer">
+                  <a href={c.imageUrl} target="_blank" rel="noreferrer">
                     <button style={{ ...styles.mini, ...styles.miniGhost }} disabled={!hasRequired}>
                       <SeatIcon /> Images
                     </button>
@@ -418,7 +525,7 @@ export default function Page() {
           </div>
 
           <div style={styles.tipSub}>
-            Add more direct links in <b>AEROLOPA_URLS</b> and <b>SEATMAPS_URLS</b> so buttons always go straight to the exact page.
+            If something shows <b>Search</b>, add a direct mapping in <b>AEROLOPA_URLS</b> / <b>SEATMAPS_URLS</b>.
           </div>
         </section>
       </div>
@@ -444,15 +551,27 @@ const styles: Record<string, React.CSSProperties> = {
 
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, marginBottom: 16 },
   brand: { display: "flex", alignItems: "center", gap: 14 },
-  logo: { width: 44, height: 44, borderRadius: 14, border: "1px solid #eee", background: "white" },
+
+  logo: { width: 44, height: 44, borderRadius: 14, border: "1px solid #eee", background: "white", objectFit: "cover" },
+  logoFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    border: "1px solid #eee",
+    background: "#6D5EF3",
+    color: "white",
+    fontWeight: 900,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   h1: { margin: 0, fontSize: 34, letterSpacing: -0.6 },
-  sub: { color: "#555", marginTop: 6, maxWidth: 680 },
+  sub: { color: "#555", marginTop: 6, maxWidth: 720 },
 
   rightPill: { border: "1px solid #eee", borderRadius: 999, padding: "8px 12px", background: "white", color: "#444", fontSize: 13 },
 
   layout: { display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 14, alignItems: "start" },
-
   card: { border: "1px solid #eee", borderRadius: 18, padding: 16, background: "white", boxShadow: "0 10px 30px rgba(0,0,0,0.06)" },
 
   cardTitle: { fontWeight: 900, marginBottom: 10, fontSize: 16 },
@@ -464,8 +583,11 @@ const styles: Record<string, React.CSSProperties> = {
 
   input: { padding: 10, borderRadius: 12, border: "1px solid #ddd", fontSize: 14, outline: "none", background: "white" },
 
+  pasteBox: { border: "1px solid #eee", borderRadius: 14, padding: 12, marginTop: 12, background: "#fafafa" },
+  pasteRow: { display: "flex", gap: 10, alignItems: "center", marginTop: 8 },
+
   tipBox: { border: "1px solid #eee", borderRadius: 14, padding: 12, marginTop: 12, background: "#fafafa" },
-  tipTitle: { fontWeight: 800, marginBottom: 8 },
+  tipTitle: { fontWeight: 900, marginBottom: 6 },
   tipSub: { color: "#777", fontSize: 12, marginTop: 8 },
 
   pills: { display: "flex", gap: 8, flexWrap: "wrap" },
@@ -507,6 +629,8 @@ const styles: Record<string, React.CSSProperties> = {
   kvTitle: { fontSize: 12, color: "#666", fontWeight: 800 },
   kvValue: { marginTop: 2, fontWeight: 900, color: "#111" },
 
+  debugLine: { marginTop: 6, fontSize: 12, color: "#666" },
+
   newTag: { display: "inline-block", marginLeft: 8, padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd", fontSize: 12, background: "white", fontWeight: 900 },
 
   small: { color: "#666", fontSize: 13, lineHeight: 1.45 },
@@ -519,6 +643,10 @@ const styles: Record<string, React.CSSProperties> = {
   compareCard: { border: "1px solid #eee", borderRadius: 16, padding: 12, background: "#fff" },
   compareHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   compareTitle: { fontWeight: 900 },
+
+  compareMeta: { marginTop: 8, fontSize: 12, color: "#666" },
+
+  bullets: { margin: "8px 0 0", paddingLeft: 18, color: "#333", fontSize: 13 },
 
   actionsRow: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 },
 
