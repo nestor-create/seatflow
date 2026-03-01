@@ -1,140 +1,146 @@
-// app/api/classify/route.ts
-import OpenAI from "openai";
-import { NextResponse } from "next/server";
-import { resolveSeatProduct } from "@/lib/resolver";
-import type { Extracted } from "@/lib/resolver";
+import { SEAT_RULES } from "./seat-products";
 
-export const runtime = "nodejs";
+export type Extracted = {
+  airline_name: string;
+  airline_iata: string;
+  flight_number: string;
+  route: string;
+  cabin: "business" | "first" | "unknown";
+  aircraft_type: string;
+  cabin_text_found: string;
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = process.env.OPENAI_MODEL || "gpt-5.2";
+  markers: {
+    lie_flat: boolean;
+    suite: boolean;
+    door: boolean;
+    direct_aisle_access: boolean;
+  };
+  markers_text: string;
 
-const extractionSchema = {
-  name: "GoogleFlightsExtraction",
-  schema: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      airline_name: { type: "string" },
-      airline_iata: { type: "string" },
-      flight_number: { type: "string" },
-      route: { type: "string" },
-      cabin: { type: "string", enum: ["business", "first", "unknown"] },
-      aircraft_type: { type: "string" },
-      cabin_text_found: { type: "string" },
-      raw_text: { type: "string" },
+  raw_text: string;
+};
 
-      markers: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          lie_flat: { type: "boolean" },
-          suite: { type: "boolean" },
-          door: { type: "boolean" },
-          direct_aisle_access: { type: "boolean" }
-        },
-        required: ["lie_flat", "suite", "door", "direct_aisle_access"]
+export type ResolveStatus = "confirmed" | "likely" | "needs_more_info";
+
+function norm(s: string) {
+  return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+function contains(hay: string, needle: string) {
+  return norm(hay).includes(norm(needle));
+}
+function airlineMatch(ex: Extracted, iata: string, name: string) {
+  const iataOk = ex.airline_iata && norm(ex.airline_iata) === norm(iata);
+  const nameOk = ex.airline_name && contains(ex.airline_name, name);
+  return iataOk || nameOk;
+}
+function aircraftMatch(ex: Extracted, aircraftIn?: string[]) {
+  if (!aircraftIn?.length) return false;
+  const a = norm(ex.aircraft_type);
+  if (!a) return false;
+  return aircraftIn.some((x) => contains(a, x));
+}
+function keywordMatch(ex: Extracted, productNames: string[]) {
+  const t = norm(ex.raw_text + " " + ex.cabin_text_found + " " + ex.markers_text);
+  return productNames.some((p) => contains(t, p));
+}
+function hasAnyMarker(ex: Extracted, required?: Array<keyof Extracted["markers"]>) {
+  if (!required?.length) return true;
+  return required.some((k) => !!ex.markers?.[k]);
+}
+
+export function resolveSeatProduct(ex: Extracted) {
+  const unknown = {
+    id: "UNKNOWN",
+    name: "Unknown",
+    notes: "Not enough evidence in screenshot.",
+    image_url: undefined as string | undefined,
+    seatmaps_airline_url: ex.airline_iata ? `https://seatmaps.com/airlines/${norm(ex.airline_iata)}/` : undefined
+  };
+
+  const baseHint =
+    "Open Flight details and retake screenshot including the aircraft type line (A350-900 / 777-300ER). Include any “lie-flat / suite / door” wording if shown.";
+
+  if (ex.cabin === "unknown") {
+    return { status: "needs_more_info" as const, seat_product: unknown, confidence: 0.3, candidates: [], next_screenshot_hint: baseHint };
+  }
+
+  const candidates: Array<{
+    product: { id: string; name: string; notes?: string; image_url?: string; seatmaps_airline_url?: string };
+    score: number;
+    reasons: string[];
+  }> = [];
+
+  for (const rule of SEAT_RULES) {
+    if (rule.cabin !== ex.cabin) continue;
+    if (!airlineMatch(ex, rule.airline_iata, rule.airline_name)) continue;
+    if (!hasAnyMarker(ex, rule.require_markers_any as any)) continue;
+
+    let score = 0.35;
+    const reasons: string[] = ["Airline match"];
+
+    const aOk = aircraftMatch(ex, rule.aircraft_in);
+    if (aOk) {
+      score += 0.25;
+      reasons.push(`Aircraft matches (${ex.aircraft_type})`);
+    } else {
+      reasons.push(ex.aircraft_type ? "Aircraft not matching" : "Aircraft missing");
+    }
+
+    const kOk = keywordMatch(ex, rule.product_names);
+    if (kOk) {
+      score += 0.6;
+      reasons.push("Product keyword found");
+    }
+
+    const m = ex.markers || { lie_flat: false, suite: false, door: false, direct_aisle_access: false };
+    const markerBoost = (m.lie_flat ? 0.08 : 0) + (m.suite ? 0.08 : 0) + (m.door ? 0.06 : 0) + (m.direct_aisle_access ? 0.04 : 0);
+    if (markerBoost > 0) {
+      score += markerBoost;
+      reasons.push("Cabin features detected (lie-flat/suite/door)");
+    }
+
+    if (rule.requires_seatmap_or_more_info && !kOk) {
+      score -= 0.2;
+      reasons.push("Mixed-fleet risk: seat map/keyword recommended");
+    }
+
+    score = Math.max(0, Math.min(1, score));
+
+    candidates.push({
+      product: {
+        id: rule.id,
+        name: rule.product_names[0] || rule.id,
+        notes: rule.notes,
+        image_url: rule.image_url,
+        seatmaps_airline_url: rule.seatmaps_airline_url
       },
-      markers_text: { type: "string" },
-
-      evidence: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            clue: { type: "string" },
-            where: { type: "string" }
-          },
-          required: ["clue", "where"]
-        }
-      }
-    },
-    required: [
-      "airline_name",
-      "airline_iata",
-      "flight_number",
-      "route",
-      "cabin",
-      "aircraft_type",
-      "cabin_text_found",
-      "raw_text",
-      "markers",
-      "markers_text",
-      "evidence"
-    ]
-  }
-} as const;
-
-export async function POST(req: Request) {
-  try {
-    const { imageDataUrl } = await req.json();
-
-    if (!imageDataUrl || typeof imageDataUrl !== "string" || !imageDataUrl.startsWith("data:image/")) {
-      return NextResponse.json(
-        { error: "Missing imageDataUrl (expected data:image/... base64 URL)." },
-        { status: 400 }
-      );
-    }
-
-    const prompt = `
-You are reading a Google Flights screenshot.
-
-Extract only what is visible. Do NOT guess.
-
-Return:
-- airline_name, airline_iata if visible
-- flight_number if visible
-- route if visible
-- cabin: business / first / unknown
-- aircraft_type if visible (A350-900, 777-300ER, etc.)
-- cabin_text_found: exact cabin snippet
-- raw_text: short transcription of key parts
-- evidence: bullets of what you saw and where
-
-Also detect cabin feature wording if visible:
-- "lie-flat" / "lie flat"
-- "suite"
-- "door"
-- "direct aisle access" / "direct-aisle access"
-
-Set booleans in "markers" accordingly, and copy the exact snippet you saw into "markers_text".
-If not visible, set all booleans false and markers_text as "".
-
-If a field is not visible, return "" (empty string), except cabin can be "unknown".
-`.trim();
-
-    const response = await client.responses.create({
-      model: MODEL,
-      text: { format: { type: "json_schema", json_schema: extractionSchema } },
-      input: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            { type: "input_image", image_url: imageDataUrl }
-          ]
-        }
-      ]
+      score,
+      reasons
     });
-
-    const jsonText =
-      (response as any).output_text ||
-      (response as any).output?.find((o: any) => o.type === "message")?.content?.find((c: any) => c.type === "output_text")
-        ?.text;
-
-    if (!jsonText) {
-      return NextResponse.json({ error: "Model returned no extraction JSON." }, { status: 500 });
-    }
-
-    const extracted = JSON.parse(jsonText) as Extracted;
-    const resolved = resolveSeatProduct(extracted);
-
-    return NextResponse.json({ ...extracted, ...resolved });
-  } catch (err: any) {
-    return NextResponse.json(
-      { error: "Classification failed.", detail: err?.message || String(err) },
-      { status: 500 }
-    );
   }
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  if (candidates.length === 0) {
+    return { status: "needs_more_info" as const, seat_product: unknown, confidence: 0.35, candidates: [], next_screenshot_hint: baseHint };
+  }
+
+  const best = candidates[0];
+  const keywordConfirmed = best.reasons.some((r) => r.toLowerCase().includes("keyword"));
+
+  let status: ResolveStatus = "likely";
+  if (keywordConfirmed && best.score >= 0.78) status = "confirmed";
+  else if (best.score >= 0.7 && !best.reasons.some((r) => r.toLowerCase().includes("mixed-fleet"))) status = "confirmed";
+  else if (best.score >= 0.55) status = "likely";
+  else status = "needs_more_info";
+
+  if (!ex.aircraft_type && !keywordConfirmed && !(ex.markers?.suite || ex.markers?.lie_flat)) status = "needs_more_info";
+
+  return {
+    status,
+    seat_product: best.product,
+    confidence: best.score,
+    candidates: candidates.slice(0, 5),
+    next_screenshot_hint: status === "needs_more_info" ? baseHint : ""
+  };
 }

@@ -1,4 +1,3 @@
-// lib/resolver.ts
 import { SEAT_RULES } from "./seat-products";
 
 export type Extracted = {
@@ -10,7 +9,6 @@ export type Extracted = {
   aircraft_type: string;
   cabin_text_found: string;
 
-  // NEW:
   markers: {
     lie_flat: boolean;
     suite: boolean;
@@ -56,22 +54,14 @@ export function resolveSeatProduct(ex: Extracted) {
     name: "Unknown",
     notes: "Not enough evidence in screenshot.",
     image_url: undefined as string | undefined,
-    seatmaps_airline_url: ex.airline_iata
-      ? `https://seatmaps.com/airlines/${norm(ex.airline_iata)}-${norm(ex.airline_name).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}/`
-      : undefined,
+    seatmaps_airline_url: ex.airline_iata ? `https://seatmaps.com/airlines/${norm(ex.airline_iata)}/` : undefined
   };
 
   const baseHint =
-    "Open Flight details in Google Flights and retake the screenshot including the aircraft type line (A350-900 / 777-300ER). If available, include the seat map and any ‘lie-flat / suite / door’ wording.";
+    "Open Flight details and retake screenshot including the aircraft type line (A350-900 / 777-300ER). Include any “lie-flat / suite / door” wording if shown.";
 
   if (ex.cabin === "unknown") {
-    return {
-      status: "needs_more_info" as const,
-      seat_product: unknown,
-      confidence: 0.3,
-      candidates: [],
-      next_screenshot_hint: baseHint,
-    };
+    return { status: "needs_more_info" as const, seat_product: unknown, confidence: 0.3, candidates: [], next_screenshot_hint: baseHint };
   }
 
   const candidates: Array<{
@@ -83,14 +73,11 @@ export function resolveSeatProduct(ex: Extracted) {
   for (const rule of SEAT_RULES) {
     if (rule.cabin !== ex.cabin) continue;
     if (!airlineMatch(ex, rule.airline_iata, rule.airline_name)) continue;
-
-    // If the rule requires “markers”, enforce it (this helps when aircraft is missing)
     if (!hasAnyMarker(ex, rule.require_markers_any as any)) continue;
 
     let score = 0.35;
     const reasons: string[] = ["Airline match"];
 
-    // Aircraft anchor
     const aOk = aircraftMatch(ex, rule.aircraft_in);
     if (aOk) {
       score += 0.25;
@@ -99,29 +86,21 @@ export function resolveSeatProduct(ex: Extracted) {
       reasons.push(ex.aircraft_type ? "Aircraft not matching" : "Aircraft missing");
     }
 
-    // Keyword anchor
     const kOk = keywordMatch(ex, rule.product_names);
     if (kOk) {
-      score += 0.60;
+      score += 0.6;
       reasons.push("Product keyword found");
     }
 
-    // Marker anchor (lie-flat/suite/door)
     const m = ex.markers || { lie_flat: false, suite: false, door: false, direct_aisle_access: false };
-    const markerBoost =
-      (m.lie_flat ? 0.08 : 0) +
-      (m.suite ? 0.08 : 0) +
-      (m.door ? 0.06 : 0) +
-      (m.direct_aisle_access ? 0.04 : 0);
-
+    const markerBoost = (m.lie_flat ? 0.08 : 0) + (m.suite ? 0.08 : 0) + (m.door ? 0.06 : 0) + (m.direct_aisle_access ? 0.04 : 0);
     if (markerBoost > 0) {
       score += markerBoost;
       reasons.push("Cabin features detected (lie-flat/suite/door)");
     }
 
-    // Mixed fleet caution unless keyword is present
     if (rule.requires_seatmap_or_more_info && !kOk) {
-      score -= 0.20;
+      score -= 0.2;
       reasons.push("Mixed-fleet risk: seat map/keyword recommended");
     }
 
@@ -133,23 +112,17 @@ export function resolveSeatProduct(ex: Extracted) {
         name: rule.product_names[0] || rule.id,
         notes: rule.notes,
         image_url: rule.image_url,
-        seatmaps_airline_url: rule.seatmaps_airline_url,
+        seatmaps_airline_url: rule.seatmaps_airline_url
       },
       score,
-      reasons,
+      reasons
     });
   }
 
   candidates.sort((a, b) => b.score - a.score);
 
   if (candidates.length === 0) {
-    return {
-      status: "needs_more_info" as const,
-      seat_product: unknown,
-      confidence: 0.35,
-      candidates: [],
-      next_screenshot_hint: baseHint,
-    };
+    return { status: "needs_more_info" as const, seat_product: unknown, confidence: 0.35, candidates: [], next_screenshot_hint: baseHint };
   }
 
   const best = candidates[0];
@@ -157,20 +130,17 @@ export function resolveSeatProduct(ex: Extracted) {
 
   let status: ResolveStatus = "likely";
   if (keywordConfirmed && best.score >= 0.78) status = "confirmed";
-  else if (best.score >= 0.70 && !best.reasons.some((r) => r.toLowerCase().includes("mixed-fleet"))) status = "confirmed";
+  else if (best.score >= 0.7 && !best.reasons.some((r) => r.toLowerCase().includes("mixed-fleet"))) status = "confirmed";
   else if (best.score >= 0.55) status = "likely";
   else status = "needs_more_info";
 
-  // If aircraft is missing AND we didn’t see strong markers/keywords, force needs_more_info
-  if (!ex.aircraft_type && !keywordConfirmed && !(ex.markers?.suite || ex.markers?.lie_flat)) {
-    status = "needs_more_info";
-  }
+  if (!ex.aircraft_type && !keywordConfirmed && !(ex.markers?.suite || ex.markers?.lie_flat)) status = "needs_more_info";
 
   return {
     status,
     seat_product: best.product,
     confidence: best.score,
     candidates: candidates.slice(0, 5),
-    next_screenshot_hint: status === "needs_more_info" ? baseHint : "",
+    next_screenshot_hint: status === "needs_more_info" ? baseHint : ""
   };
 }
