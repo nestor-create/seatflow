@@ -1,3 +1,4 @@
+// lib/resolver.ts
 import { SEAT_RULES } from "./seat-products";
 
 export type Extracted = {
@@ -58,7 +59,7 @@ export function resolveSeatProduct(ex: Extracted) {
   };
 
   const baseHint =
-    "Open Flight details and retake screenshot including the aircraft type line (A350-900 / 777-300ER). Include any “lie-flat / suite / door” wording if shown.";
+    "Open Flight details in Google Flights and retake screenshot including the aircraft type line (A350-900 / 777-300ER). Include any wording like “lie-flat”, “suite”, or “door” if shown.";
 
   if (ex.cabin === "unknown") {
     return { status: "needs_more_info" as const, seat_product: unknown, confidence: 0.3, candidates: [], next_screenshot_hint: baseHint };
@@ -93,7 +94,12 @@ export function resolveSeatProduct(ex: Extracted) {
     }
 
     const m = ex.markers || { lie_flat: false, suite: false, door: false, direct_aisle_access: false };
-    const markerBoost = (m.lie_flat ? 0.08 : 0) + (m.suite ? 0.08 : 0) + (m.door ? 0.06 : 0) + (m.direct_aisle_access ? 0.04 : 0);
+    const markerBoost =
+      (m.lie_flat ? 0.08 : 0) +
+      (m.suite ? 0.08 : 0) +
+      (m.door ? 0.06 : 0) +
+      (m.direct_aisle_access ? 0.04 : 0);
+
     if (markerBoost > 0) {
       score += markerBoost;
       reasons.push("Cabin features detected (lie-flat/suite/door)");
