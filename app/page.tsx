@@ -1,624 +1,373 @@
+// app/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-/* =========================================================
-   SeatMaps exact links (best experience)
-   Key format: "AIRLINE|AIRCRAFT" (normalized)
-   Add more as you discover your most-used combos.
-   ========================================================= */
+type ApiResponse = {
+  airline_name: string;
+  airline_iata: string;
+  flight_number: string;
+  route: string;
+  cabin: "business" | "first" | "unknown";
+  aircraft_type: string;
+  cabin_text_found: string;
 
-const SEATMAPS_URLS: Record<string, string> = {
-  "LH|A350-900": "https://seatmaps.com/airlines/lh-lufthansa/airbus-a350-900/",
-  "LH|A350-1000": "https://seatmaps.com/airlines/lh-lufthansa/airbus-a350-1000/",
-  "NH|777-300ER": "https://seatmaps.com/airlines/nh-all-nippon-airways/boeing-777-300er/",
-  "BA|A350-1000": "https://seatmaps.com/airlines/ba-british-airways/airbus-a350-1000/",
-  "AA|777-300ER": "https://seatmaps.com/airlines/aa-american-airlines/boeing-777-300er/",
-  "QR|A350-1000": "https://seatmaps.com/airlines/qr-qatar-airways/airbus-a350-1000/",
-  "SQ|A350-900": "https://seatmaps.com/airlines/sq-singapore-airlines/airbus-a350-900/",
-  "EK|A380": "https://seatmaps.com/airlines/ek-emirates/airbus-a380/",
-  "AF|777-300ER": "https://seatmaps.com/airlines/af-air-france/boeing-777-300er/",
-  "UA|787-9": "https://seatmaps.com/airlines/ua-united-airlines/boeing-787-9/",
-  "DL|A350-900": "https://seatmaps.com/airlines/dl-delta/airbus-a350-900/",
-};
-
-/* AeroLOPA button stays, but with NO icon */
-const AEROLOPA_URLS: Record<string, string> = {
-  "LH|A350-900": "https://www.aerolopa.com/lh-359",
-  "NH|777-300ER": "https://www.aerolopa.com/nh-773",
-  "BA|A350-1000": "https://www.aerolopa.com/ba-351",
-  "AA|777-300ER": "https://www.aerolopa.com/aa-773",
-  "QR|A350-1000": "https://www.aerolopa.com/qr-351",
-};
-
-const TOP_AIRLINES = [
-  { code: "AA", name: "American Airlines" },
-  { code: "BA", name: "British Airways" },
-  { code: "LH", name: "Lufthansa" },
-  { code: "NH", name: "ANA" },
-  { code: "QR", name: "Qatar Airways" },
-  { code: "SQ", name: "Singapore Airlines" },
-  { code: "EK", name: "Emirates" },
-  { code: "AF", name: "Air France" },
-  { code: "UA", name: "United Airlines" },
-  { code: "DL", name: "Delta Air Lines" },
-] as const;
-
-type Cabin = "Economy" | "Premium Economy" | "Business" | "First";
-
-type AISuggestion = {
-  productName: string;
-  isNew: boolean;
-  oneLiner: string;
-  sellingPoints: string[];
-  confidence: number; // 0..1
-  notes: string;
-};
-
-const VALID_AIRCRAFT = new Set<string>([
-  "A330-200",
-  "A330-300",
-  "A330-900",
-  "A350-900",
-  "A350-1000",
-  "A380",
-  "777-200ER",
-  "777-300ER",
-  "787-8",
-  "787-9",
-  "787-10",
-]);
-
-function normalizeAirline(v: string) {
-  return (v || "").trim().toUpperCase();
-}
-function normalizeRoute(v: string) {
-  return (v || "").trim().toUpperCase().replace(/\s+/g, "");
-}
-function normalizeAircraft(input: string) {
-  let x = (input || "").trim().toUpperCase();
-  x = x.replace(/^AIRBUS\s+/i, "");
-  x = x.replace(/^BOEING\s+/i, "");
-  x = x.replace(/[_\s]+/g, "-");
-
-  if (x === "359" || x === "A359") return "A350-900";
-  if (x === "351" || x === "A351" || x === "35K" || x === "A35K") return "A350-1000";
-  if (x === "77W" || x === "773") return "777-300ER";
-  if (x === "789") return "787-9";
-  if (x === "7810") return "787-10";
-  if (x === "339") return "A330-900";
-  if (x === "380") return "A380";
-
-  x = x.replace(/^A350-?900$/, "A350-900");
-  x = x.replace(/^A350-?1000$/, "A350-1000");
-  x = x.replace(/^A330-?900$/, "A330-900");
-  x = x.replace(/^A330-?200$/, "A330-200");
-  x = x.replace(/^A330-?300$/, "A330-300");
-  x = x.replace(/^777-?300ER$/, "777-300ER");
-  x = x.replace(/^777-?200ER$/, "777-200ER");
-  x = x.replace(/^787-?8$/, "787-8");
-  x = x.replace(/^787-?9$/, "787-9");
-  x = x.replace(/^787-?10$/, "787-10");
-  if (x.startsWith("A380")) return "A380";
-
-  return x;
-}
-function isValidRoute(routeKey: string) {
-  return /^[A-Z]{3}-[A-Z]{3}$/.test(routeKey);
-}
-function isValidAircraft(aircraftKey: string) {
-  return VALID_AIRCRAFT.has(aircraftKey);
-}
-function buildSearchQuery(airline: string, route: string, aircraft: string, cabin: string) {
-  const parts = [
-    airline && `airline ${airline}`,
-    route && `route ${route}`,
-    aircraft && `aircraft ${aircraft}`,
-    cabin && `cabin ${cabin}`,
-    "seat map",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  return encodeURIComponent(parts);
-}
-function prettyAirline(code: string) {
-  const found = TOP_AIRLINES.find((a) => a.code === code);
-  return found ? `${found.code} · ${found.name}` : code;
-}
-
-/* Minimal fallback if AI is unavailable */
-function fallbackSuggestion(airline: string, cabin: Cabin, aircraft: string): AISuggestion {
-  const a = airline.toUpperCase();
-  if (a === "LH" && cabin === "Business") {
-    const isAllegris = ["A350-900", "A350-1000", "787-9"].includes(aircraft);
-    return {
-      productName: isAllegris ? "Allegris" : "Lufthansa Business",
-      isNew: isAllegris,
-      oneLiner: isAllegris
-        ? "Target the newest Lufthansa business product when operating."
-        : "Strong schedule-led option; verify seat configuration.",
-      sellingPoints: isAllegris
-        ? ["New-generation cabin story", "Premium comfort angle for long-haul", "Confirm exact seat via seat map"]
-        : ["Good route/time fit", "Seat map verification removes surprises", "Optimize seat selection once aircraft is confirmed"],
-      confidence: 0.55,
-      notes: "Verify exact configuration via SeatMaps/AeroLOPA for the specific flight/date.",
-    };
-  }
-  return {
-    productName: `${prettyAirline(a)} ${cabin}`,
-    isNew: false,
-    oneLiner: "Strong option — verify the exact seat layout on the operating aircraft.",
-    sellingPoints: ["Clear expectations with seat map", "Pick best seats once aircraft is confirmed", "Great comparison versus other options"],
-    confidence: 0.35,
-    notes: "Verify exact configuration via SeatMaps/AeroLOPA for the specific flight/date.",
+  // NEW: extracted “feature words” seen in Google Flights (if present)
+  markers: {
+    lie_flat: boolean;
+    suite: boolean;
+    door: boolean;
+    direct_aisle_access: boolean;
   };
+  markers_text: string; // exact text snippet where markers were seen
+
+  evidence: { clue: string; where?: string }[];
+
+  // resolver output
+  status: "confirmed" | "likely" | "needs_more_info";
+  confidence: number;
+  next_screenshot_hint?: string;
+
+  seat_product: {
+    id: string;
+    name: string;
+    notes?: string;
+    image_url?: string;
+    seatmaps_airline_url?: string;
+  };
+
+  // optional ranking
+  candidates?: Array<{
+    product: { id: string; name: string; notes?: string; image_url?: string; seatmaps_airline_url?: string };
+    score: number;
+    reasons: string[];
+  }>;
+};
+
+function pct(n?: number) {
+  if (typeof n !== "number") return null;
+  return Math.round(Math.max(0, Math.min(1, n)) * 100);
 }
 
-/* Icons */
-function Icon({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{ display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
-      {children}
-    </span>
-  );
-}
-function SeatmapIcon() {
-  return (
-    <Icon>
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-        <path d="M4 5h16v14H4V5z" stroke="currentColor" strokeWidth="1.6" />
-        <path
-          d="M7 8h2M11 8h2M15 8h2M7 12h2M11 12h2M15 12h2M7 16h2M11 16h2M15 16h2"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-        />
-      </svg>
-    </Icon>
-  );
-}
-function ImageIcon() {
-  return (
-    <Icon>
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-        <path d="M4 6h16v12H4V6z" stroke="currentColor" strokeWidth="1.6" />
-        <path d="M8.5 10a1.2 1.2 0 100-2.4 1.2 1.2 0 000 2.4z" fill="currentColor" />
-        <path d="M4 16l5-5 4 4 3-3 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      </svg>
-    </Icon>
-  );
-}
-function SparkIcon() {
-  return (
-    <Icon>
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-        <path d="M12 2l1.2 4.4L18 8l-4.8 1.6L12 14l-1.2-4.4L6 8l4.8-1.6L12 2z" stroke="currentColor" strokeWidth="1.6" />
-      </svg>
-    </Icon>
-  );
+function buildPitch(r: ApiResponse) {
+  const product = r.seat_product?.name || "this cabin";
+  const status = r.status;
+
+  const intro =
+    status === "confirmed"
+      ? `Great news — this looks like ${product}.`
+      : status === "likely"
+      ? `This is likely ${product}, based on the aircraft + cabin details.`
+      : `We need one more detail to confidently confirm the exact seat for ${product}.`;
+
+  const bullets =
+    status === "needs_more_info"
+      ? [
+          "Open Flight details in Google Flights and capture the aircraft line (e.g., A350-900 / 777-300ER).",
+          "If available, include the seat map section — it helps confirm suite layouts.",
+          "Once confirmed, we’ll pick the best seats and set expectations clearly.",
+        ]
+      : [
+          "Lie-flat comfort (and suite-style privacy when available).",
+          "We’ll verify the operating aircraft configuration to avoid last-minute swaps.",
+          "We can recommend the best rows for privacy, minimal noise, and easiest aisle access.",
+        ];
+
+  return { intro, bullets };
 }
 
 export default function Page() {
-  const [airline, setAirline] = useState("");
-  const [route, setRoute] = useState("");
-  const [aircraft, setAircraft] = useState("");
-  const [cabin, setCabin] = useState<Cabin>("Business");
-  const [compare, setCompare] = useState<string[]>(["LH", "NH", "BA"]);
-  const [logoOk, setLogoOk] = useState(true);
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [result, setResult] = useState<ApiResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const airlineKey = useMemo(() => normalizeAirline(airline), [airline]);
-  const routeKey = useMemo(() => normalizeRoute(route), [route]);
-  const aircraftKey = useMemo(() => normalizeAircraft(aircraft), [aircraft]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const routeOk = useMemo(() => isValidRoute(routeKey), [routeKey]);
-  const aircraftOk = useMemo(() => isValidAircraft(aircraftKey), [aircraftKey]);
-
-  const unlocked = airlineKey.length > 0 && routeOk && aircraftOk;
-
-  const mappingKey = `${airlineKey}|${aircraftKey}`;
-  const seatmapsExact = !!SEATMAPS_URLS[mappingKey];
-
-  const searchQ = useMemo(
-    () => buildSearchQuery(airlineKey, routeKey, aircraftKey, cabin),
-    [airlineKey, routeKey, aircraftKey, cabin]
-  );
-
-  const seatmapsUrl = seatmapsExact
-    ? SEATMAPS_URLS[mappingKey]
-    : `https://seatmaps.com/search/?q=${searchQ}`;
-
-  const aerolopaUrl =
-    airlineKey && aircraftKey && AEROLOPA_URLS[mappingKey]
-      ? AEROLOPA_URLS[mappingKey]
-      : `https://www.aerolopa.com/search?query=${searchQ}`;
-
-  const imageUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(
-    `${airlineKey} ${aircraftKey} ${cabin} cabin`
-  )}`;
-
-  // --- OpenAI suggestion state ---
-  const [ai, setAi] = useState<AISuggestion | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-
-  // Debounce so we don’t call API on every keystroke
-  const debounceRef = useRef<number | null>(null);
-
+  // Ctrl+V paste
   useEffect(() => {
-    setAi(null);
-    setAiError(null);
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
 
-    if (!unlocked) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          const blob = item.getAsFile();
+          if (!blob) return;
 
-    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+          const reader = new FileReader();
+          reader.onload = () => setImageDataUrl(String(reader.result));
+          reader.readAsDataURL(blob);
 
-    debounceRef.current = window.setTimeout(async () => {
-      setAiLoading(true);
-      setAiError(null);
-
-      try {
-        const res = await fetch("/api/suggest", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            airline: airlineKey,
-            route: routeKey,
-            aircraft: aircraftKey,
-            cabin,
-          }),
-        });
-
-        const json = await res.json();
-
-        if (!json.ok) {
-          // fallback
-          setAi(fallbackSuggestion(airlineKey, cabin, aircraftKey));
-          setAiError(json.error || "AI unavailable — using fallback.");
-        } else {
-          setAi(json.data as AISuggestion);
+          setResult(null);
+          setError("");
+          return;
         }
-      } catch (e: any) {
-        setAi(fallbackSuggestion(airlineKey, cabin, aircraftKey));
-        setAiError(e?.message || "AI error — using fallback.");
-      } finally {
-        setAiLoading(false);
       }
-    }, 450);
-
-    return () => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      setError("Paste a Google Flights screenshot image (Ctrl+V).");
     };
-  }, [unlocked, airlineKey, routeKey, aircraftKey, cabin]);
 
-  async function copyPitch() {
-    if (!ai) return;
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
 
-    const header = `${airlineKey} · ${routeKey} · ${aircraftKey} · ${cabin}`;
-    const text = [
-      header,
-      "",
-      `Recommended product: ${ai.productName}${ai.isNew ? " (NEW)" : ""}`,
-      ai.oneLiner ? `\n${ai.oneLiner}` : "",
-      "",
-      "Why it stands out:",
-      ...ai.sellingPoints.map((x) => `- ${x}`),
-      ai.notes ? `\nNote: ${ai.notes}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+  const onUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    await navigator.clipboard.writeText(text);
-    alert("Client pitch copied ✅");
-  }
+    if (!file.type.startsWith("image/")) {
+      setError("Please upload an image file (PNG/JPG/WebP).");
+      return;
+    }
 
-  function toggleCompare(code: string) {
-    setCompare((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]));
-  }
+    const reader = new FileReader();
+    reader.onload = () => setImageDataUrl(String(reader.result));
+    reader.readAsDataURL(file);
 
-  const compareCards = useMemo(() => {
-    return compare.map((code) => {
-      const a = code.toUpperCase();
-      const k = `${a}|${aircraftKey}`;
-      const smExact = !!SEATMAPS_URLS[k];
-      const q = buildSearchQuery(a, routeKey, aircraftKey, cabin);
+    setResult(null);
+    setError("");
+  };
 
-      return {
-        airline: a,
-        label: prettyAirline(a),
-        seatmapsUrl: smExact ? SEATMAPS_URLS[k] : `https://seatmaps.com/search/?q=${q}`,
-        seatmapsExact: smExact,
-        aerolopaUrl: AEROLOPA_URLS[k] ? AEROLOPA_URLS[k] : `https://www.aerolopa.com/search?query=${q}`,
-        imageUrl: `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${a} ${aircraftKey} ${cabin} cabin`)}`,
-      };
-    });
-  }, [compare, routeKey, aircraftKey, cabin]);
+  const clearAll = () => {
+    setImageDataUrl(null);
+    setResult(null);
+    setError("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const classify = async () => {
+    if (!imageDataUrl) return;
+
+    setLoading(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Request failed");
+
+      setResult(data);
+    } catch (err: any) {
+      setError(err?.message || "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const conf = pct(result?.confidence);
 
   return (
-    <main style={styles.page}>
-      <div style={styles.header}>
-        <div style={styles.brand}>
-          {logoOk ? (
-            <img src="/ascend-logo.png" alt="Ascend" style={styles.logo} onError={() => setLogoOk(false)} />
-          ) : (
-            <div style={styles.logoFallback}>A</div>
-          )}
-
+    <main className="min-h-screen bg-white text-gray-900">
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-2xl bg-violet-600" />
           <div>
-            <h1 style={styles.h1}>Ascend Seat Image & Map Project</h1>
-            <div style={styles.sub}>
-              Auto-suggest unlocks only after Airline + Route (AAA-BBB) + recognized Aircraft.
-            </div>
+            <h1 className="text-3xl font-semibold">Ascend Cabin Atlas</h1>
+            <p className="text-sm text-gray-600">
+              Ctrl+V a Google Flights screenshot → auto-suggests the premium cabin product + shows the seat image.
+            </p>
           </div>
         </div>
 
-        <div style={styles.rightPill}>AI product pitch · SeatMaps auto-linked</div>
-      </div>
-
-      <div style={styles.layout}>
-        {/* SEARCH */}
-        <section style={styles.card}>
-          <div style={styles.cardTitle}>Search</div>
-
-          <div style={styles.grid}>
-            <Field label="Airline (IATA)">
-              <input value={airline} onChange={(e) => setAirline(e.target.value)} style={styles.input} placeholder="e.g. LH" />
-            </Field>
-
-            <Field label="Route (AAA-BBB)">
-              <input value={route} onChange={(e) => setRoute(e.target.value)} style={styles.input} placeholder="e.g. JFK-LHR" />
-              <div style={{ marginTop: 6, fontSize: 12, color: routeKey.length === 0 ? "#777" : routeOk ? "#0a7" : "#b00" }}>
-                {routeKey.length === 0 ? "Example: JFK-LHR" : routeOk ? "Route looks good ✅" : "Route must be AAA-BBB"}
+        <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Left: Paste/Upload */}
+          <section className="rounded-3xl border border-gray-200 p-6 shadow-sm">
+            <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6">
+              <div className="text-sm font-semibold">Paste screenshot</div>
+              <div className="mt-1 text-sm text-gray-600">
+                Click anywhere and press <span className="font-mono">Ctrl+V</span>.
+                <div className="mt-2 text-xs text-gray-500">
+                  Best accuracy: in Google Flights open <span className="font-medium">Flight details</span> and include the{" "}
+                  <span className="font-medium">aircraft type line</span> (A350-900 / 777-300ER) and any “lie-flat / suite / door”
+                  wording shown.
+                </div>
               </div>
-            </Field>
 
-            <Field label="Aircraft (validated)">
-              <input value={aircraft} onChange={(e) => setAircraft(e.target.value)} style={styles.input} placeholder="e.g. A350-900 / 359 / 77W / 789" />
-              <div style={{ marginTop: 6, fontSize: 12, color: aircraftKey.length === 0 ? "#777" : aircraftOk ? "#0a7" : "#b00" }}>
-                {aircraftKey.length === 0
-                  ? "Examples: A350-900, 777-300ER, 787-9, A330-900, A380"
-                  : aircraftOk
-                    ? `Aircraft recognized ✅ (${aircraftKey})`
-                    : `Not recognized ❌ (${aircraftKey}). Add to VALID_AIRCRAFT in code.`}
-              </div>
-            </Field>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={onUpload} className="block text-sm" />
 
-            <Field label="Cabin">
-              <select value={cabin} onChange={(e) => setCabin(e.target.value as Cabin)} style={styles.input}>
-                <option>Economy</option>
-                <option>Premium Economy</option>
-                <option>Business</option>
-                <option>First</option>
-              </select>
-            </Field>
-          </div>
+                <button
+                  onClick={classify}
+                  disabled={!imageDataUrl || loading}
+                  className="rounded-xl bg-gray-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-40"
+                >
+                  {loading ? "Analyzing…" : "Auto-suggest cabin"}
+                </button>
 
-          {/* BUTTONS */}
-          <div style={styles.actions}>
-            {/* AeroLOPA text-only */}
-            <a href={aerolopaUrl} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnPrimary }} disabled={!unlocked}>
-                AeroLOPA Seat Plan
-              </button>
-            </a>
-
-            {/* SeatMaps auto-linked */}
-            <a href={seatmapsUrl} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnSecondary }} disabled={!unlocked}>
-                <SeatmapIcon /> SeatMaps {unlocked ? (seatmapsExact ? "· Exact ✅" : "· Search ✅") : ""}
-              </button>
-            </a>
-
-            <a href={imageUrl} target="_blank" rel="noreferrer">
-              <button style={{ ...styles.btn, ...styles.btnGhost }} disabled={!unlocked}>
-                <ImageIcon /> Aircraft Images
-              </button>
-            </a>
-
-            <button style={{ ...styles.btn, ...styles.btnAccent }} disabled={!unlocked || !ai} onClick={copyPitch}>
-              <SparkIcon /> Copy client pitch
-            </button>
-          </div>
-
-          {/* STATUS */}
-          <div style={styles.productStrip}>
-            <div>
-              <div style={styles.kvTitle}>Unlock status</div>
-              <div style={styles.kvValue}>
-                {unlocked ? "Ready ✅" : "Enter Airline + valid Route + recognized Aircraft to unlock"}
-              </div>
-              <div style={{ marginTop: 6, fontSize: 12, color: "#666" }}>
-                SeatMaps sync: {unlocked ? (seatmapsExact ? "Exact page ✅" : "Search fallback ✅") : "Locked"}
+                <button onClick={clearAll} className="rounded-xl border border-gray-200 px-5 py-2 text-sm font-medium">
+                  Clear
+                </button>
               </div>
             </div>
 
-            <div style={{ textAlign: "right" }}>
-              <div style={styles.kvTitle}>Suggested product</div>
-              <div style={styles.kvValue}>
-                {!unlocked ? (
-                  <span style={{ color: "#777" }}>—</span>
-                ) : aiLoading ? (
-                  <span style={{ color: "#777" }}>Thinking…</span>
-                ) : ai ? (
-                  <>
-                    {ai.productName} {ai.isNew ? <span style={styles.newTag}>NEW</span> : null}
-                  </>
-                ) : (
-                  <span style={{ color: "#777" }}>—</span>
-                )}
-              </div>
+            {error ? (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
+            ) : null}
+
+            <div className="mt-4 rounded-3xl border border-gray-200 overflow-hidden bg-gray-50">
+              {imageDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={imageDataUrl} alt="Google Flights screenshot" className="w-full" />
+              ) : (
+                <div className="p-10 text-center text-sm text-gray-500">Paste or upload a screenshot to preview it here.</div>
+              )}
             </div>
-          </div>
+          </section>
 
-          {/* PITCH */}
-          {unlocked && ai ? (
-            <div style={styles.sellBox}>
-              <div style={styles.sellTitle}>Client-ready pitch</div>
+          {/* Right: Result */}
+          <section className="rounded-3xl border border-gray-200 p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="text-lg font-semibold">Cabin suggestion</div>
 
-              {aiError ? <div style={styles.warn}>Heads up: {aiError}</div> : null}
-
-              <div style={styles.pitchLine}><b>{ai.oneLiner}</b></div>
-
-              <div style={{ marginTop: 10 }}>
-                <div style={styles.pitchLine}><b>Why it stands out:</b></div>
-                <ul style={styles.bullets}>
-                  {ai.sellingPoints.map((s) => <li key={s}>{s}</li>)}
-                </ul>
-              </div>
-
-              <div style={styles.note}>
-                Confidence: {Math.round((ai.confidence || 0) * 100)}% · {ai.notes}
-              </div>
+              {result?.status ? (
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold">
+                    {result.status.toUpperCase()}
+                  </span>
+                  {conf != null ? <span className="text-xs text-gray-600">{conf}% confidence</span> : null}
+                </div>
+              ) : (
+                <span className="text-xs text-gray-500">—</span>
+              )}
             </div>
-          ) : null}
-        </section>
 
-        {/* COMPARE */}
-        <section style={styles.card}>
-          <div style={styles.cardTitle}>Compare options</div>
-          <div style={styles.small}>Compare unlocks once route + aircraft are valid. SeatMaps will auto-sync per airline+aircraft mapping.</div>
-
-          <div style={styles.comparePicker}>
-            {TOP_AIRLINES.map((a) => (
-              <label key={a.code} style={styles.check}>
-                <input type="checkbox" checked={compare.includes(a.code)} onChange={() => toggleCompare(a.code)} />
-                <span>{a.code}</span>
-              </label>
-            ))}
-          </div>
-
-          <div style={styles.grid2}>
-            {compareCards.map((c) => (
-              <div key={c.airline} style={styles.compareCard}>
-                <div style={styles.compareHeader}>
-                  <div style={styles.compareTitle}>{c.label}</div>
-                  {unlocked ? <span style={styles.miniTag}>{c.seatmapsExact ? "SeatMaps Exact" : "SeatMaps Search"}</span> : null}
-                </div>
-
-                <div style={styles.small}>
-                  <b>Route:</b> {routeKey || "—"} <br />
-                  <b>Aircraft:</b> {aircraftKey || "—"} · <b>Cabin:</b> {cabin}
-                </div>
-
-                <div style={styles.actionsRow}>
-                  <a href={c.aerolopaUrl} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniPrimary }} disabled={!unlocked}>
-                      Seat plan
-                    </button>
-                  </a>
-
-                  <a href={c.seatmapsUrl} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniSecondary }} disabled={!unlocked}>
-                      <SeatmapIcon /> Seat map
-                    </button>
-                  </a>
-
-                  <a href={c.imageUrl} target="_blank" rel="noreferrer">
-                    <button style={{ ...styles.mini, ...styles.miniGhost }} disabled={!unlocked}>
-                      <ImageIcon /> Images
-                    </button>
-                  </a>
-                </div>
+            {!result ? (
+              <div className="mt-6 rounded-2xl bg-gray-50 p-6 text-sm text-gray-600">
+                Paste a screenshot and click <span className="font-medium">Auto-suggest cabin</span>.
               </div>
-            ))}
-          </div>
-        </section>
+            ) : (
+              <>
+                {result.next_screenshot_hint ? (
+                  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <div className="font-semibold">Need one more detail</div>
+                    <div className="mt-1">{result.next_screenshot_hint}</div>
+                  </div>
+                ) : null}
+
+                <div className="mt-4 rounded-3xl border border-gray-200 p-5">
+                  <div className="text-2xl font-semibold">{result.seat_product?.name || "Unknown"}</div>
+                  {result.seat_product?.notes ? (
+                    <div className="mt-2 text-sm text-gray-600">{result.seat_product.notes}</div>
+                  ) : null}
+
+                  <div className="mt-4 grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+                    <div>
+                      <span className="font-medium">Airline:</span> {result.airline_name || "—"}{" "}
+                      {result.airline_iata ? `(${result.airline_iata})` : ""}
+                    </div>
+                    <div>
+                      <span className="font-medium">Flight:</span> {result.flight_number || "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Route:</span> {result.route || "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Aircraft:</span> {result.aircraft_type || "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Cabin:</span> {result.cabin || "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Cabin label:</span> {result.cabin_text_found || "—"}
+                    </div>
+                  </div>
+
+                  {/* markers */}
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                    {result.markers?.lie_flat ? (
+                      <span className="rounded-full border px-3 py-1">Lie-flat</span>
+                    ) : null}
+                    {result.markers?.suite ? (
+                      <span className="rounded-full border px-3 py-1">Suite</span>
+                    ) : null}
+                    {result.markers?.door ? (
+                      <span className="rounded-full border px-3 py-1">Door</span>
+                    ) : null}
+                    {result.markers?.direct_aisle_access ? (
+                      <span className="rounded-full border px-3 py-1">Direct aisle access</span>
+                    ) : null}
+                    {result.markers_text ? (
+                      <span className="text-gray-500">({result.markers_text})</span>
+                    ) : null}
+                  </div>
+
+                  {/* SeatMaps Exact */}
+                  {result.seat_product?.seatmaps_airline_url ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <a
+                        href={result.seat_product.seatmaps_airline_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-medium border border-gray-200 hover:bg-gray-50"
+                      >
+                        SeatMaps Exact
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Seat image */}
+                <div className="mt-6">
+                  <div className="text-sm font-semibold">Seat image</div>
+                  <div className="mt-3 rounded-3xl border border-gray-200 overflow-hidden bg-gray-50">
+                    {result.seat_product?.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={result.seat_product.image_url} alt={`${result.seat_product.name} seat`} className="w-full" />
+                    ) : (
+                      <div className="p-6 text-sm text-gray-600">
+                        No seat image configured for this product yet.
+                        <div className="mt-1 text-xs text-gray-500">
+                          Add <span className="font-mono">image_url</span> in <span className="font-mono">lib/seat-products.ts</span>.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Client pitch */}
+                <div className="mt-6 rounded-3xl border border-gray-200 p-5">
+                  <div className="text-sm font-semibold">Client-ready pitch</div>
+                  {(() => {
+                    const pitch = buildPitch(result);
+                    return (
+                      <>
+                        <div className="mt-2 text-sm text-gray-800">{pitch.intro}</div>
+                        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                          {pitch.bullets.map((b, i) => (
+                            <li key={i}>{b}</li>
+                          ))}
+                        </ul>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* Evidence */}
+                {result.evidence?.length ? (
+                  <div className="mt-6">
+                    <div className="text-sm font-semibold">Evidence</div>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                      {result.evidence.slice(0, 8).map((e, i) => (
+                        <li key={i}>
+                          <span className="font-medium">{e.clue}</span>
+                          {e.where ? <span className="text-gray-500"> — {e.where}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </section>
+        </div>
       </div>
     </main>
   );
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={styles.label}>
-      <span style={styles.labelText}>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  page: { maxWidth: 1180, margin: "28px auto", padding: "0 16px 32px", fontFamily: "system-ui" },
-
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, marginBottom: 16 },
-  brand: { display: "flex", alignItems: "center", gap: 14 },
-
-  logo: { width: 44, height: 44, borderRadius: 14, border: "1px solid #eee", background: "white", objectFit: "cover" },
-  logoFallback: {
-    width: 44, height: 44, borderRadius: 14, border: "1px solid #eee",
-    background: "#6D5EF3", color: "white", fontWeight: 900,
-    display: "flex", alignItems: "center", justifyContent: "center",
-  },
-
-  h1: { margin: 0, fontSize: 34, letterSpacing: -0.6 },
-  sub: { color: "#555", marginTop: 6, maxWidth: 720 },
-
-  rightPill: { border: "1px solid #eee", borderRadius: 999, padding: "8px 12px", background: "white", color: "#444", fontSize: 13 },
-
-  layout: { display: "grid", gridTemplateColumns: "1.05fr 1fr", gap: 14, alignItems: "start" },
-  card: { border: "1px solid #eee", borderRadius: 18, padding: 16, background: "white", boxShadow: "0 10px 30px rgba(0,0,0,0.06)" },
-
-  cardTitle: { fontWeight: 900, marginBottom: 10, fontSize: 16 },
-  small: { color: "#666", fontSize: 13, lineHeight: 1.45 },
-
-  grid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 8 },
-
-  label: { display: "flex", flexDirection: "column", gap: 6 },
-  labelText: { fontSize: 12, color: "#444" },
-
-  input: { padding: 10, borderRadius: 12, border: "1px solid #ddd", fontSize: 14, outline: "none", background: "white" },
-
-  actions: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 },
-
-  btn: {
-    width: "100%", padding: "10px 12px", borderRadius: 14,
-    border: "1px solid #ddd", cursor: "pointer",
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-    gap: 8, fontWeight: 800,
-  },
-
-  btnPrimary: { background: "#111", color: "white" },
-  btnSecondary: { background: "#f3f4f6", color: "#111" },
-  btnGhost: { background: "white", color: "#111" },
-  btnAccent: { background: "#6D5EF3", color: "white", border: "1px solid rgba(0,0,0,0.06)" },
-
-  productStrip: {
-    marginTop: 14, padding: 12, borderRadius: 16, border: "1px solid #eee",
-    background: "#fafafa", display: "flex", justifyContent: "space-between", gap: 12,
-  },
-
-  kvTitle: { fontSize: 12, color: "#666", fontWeight: 800 },
-  kvValue: { marginTop: 2, fontWeight: 900, color: "#111" },
-
-  newTag: { display: "inline-block", marginLeft: 8, padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd", fontSize: 12, background: "white", fontWeight: 900 },
-  miniTag: { display: "inline-block", padding: "2px 8px", borderRadius: 999, border: "1px solid #eee", fontSize: 12, background: "#fafafa", fontWeight: 800 },
-
-  sellBox: { marginTop: 12, border: "1px solid #eee", background: "#fff", borderRadius: 16, padding: 12 },
-  sellTitle: { fontWeight: 900, marginBottom: 6 },
-
-  pitchLine: { marginBottom: 8, color: "#222", fontSize: 14, lineHeight: 1.55 },
-  note: { marginTop: 10, fontSize: 12, color: "#666" },
-  warn: { marginBottom: 10, padding: 10, borderRadius: 12, border: "1px solid #f2c200", background: "#fff7cc", color: "#5a4700", fontSize: 13 },
-
-  bullets: { margin: "8px 0 0", paddingLeft: 18, color: "#333", fontSize: 13 },
-
-  comparePicker: { display: "flex", gap: 10, flexWrap: "wrap", margin: "10px 0 12px" },
-  check: { display: "flex", gap: 6, alignItems: "center", border: "1px solid #eee", borderRadius: 999, padding: "6px 10px", background: "#fafafa" },
-
-  grid2: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 },
-
-  compareCard: { border: "1px solid #eee", borderRadius: 16, padding: 12, background: "#fff" },
-  compareHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  compareTitle: { fontWeight: 900 },
-
-  actionsRow: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 },
-
-  mini: {
-    padding: "8px 10px", borderRadius: 12, border: "1px solid #ddd",
-    background: "white", cursor: "pointer", fontSize: 12,
-    display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 900,
-  },
-
-  miniPrimary: { background: "#111", color: "white" },
-  miniSecondary: { background: "#f3f4f6", color: "#111" },
-  miniGhost: { background: "white", color: "#111" },
-};
