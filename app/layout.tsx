@@ -3,11 +3,11 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Ascend Cabin Atlas",
-  description: "Paste a Google Flights screenshot to detect premium cabin products."
+  description: "Seat matcher with SeatMaps, AeroLOPA, and image search."
 };
 
 export default function RootLayout({
-  children
+  children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
