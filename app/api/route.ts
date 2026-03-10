@@ -1,11 +1,14 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { resolveSeatProduct } from "../../../lib/resolver";
-import type { Extracted } from "../../../lib/resolver";
+import { resolveSeatProduct } from "../../lib/resolver";
+import type { Extracted } from "../../lib/resolver";
 
 export const runtime = "nodejs";
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.2";
 
 const extractionSchema = {
@@ -22,7 +25,6 @@ const extractionSchema = {
       aircraft_type: { type: "string" },
       cabin_text_found: { type: "string" },
       raw_text: { type: "string" },
-
       markers: {
         type: "object",
         additionalProperties: false,
@@ -35,7 +37,6 @@ const extractionSchema = {
         required: ["lie_flat", "suite", "door", "direct_aisle_access"]
       },
       markers_text: { type: "string" },
-
       evidence: {
         type: "array",
         items: {
@@ -67,10 +68,18 @@ const extractionSchema = {
 
 export async function POST(req: Request) {
   try {
-    const { imageDataUrl } = await req.json();
+    const body = await req.json();
+    const imageDataUrl = body?.imageDataUrl;
 
-    if (!imageDataUrl || typeof imageDataUrl !== "string" || !imageDataUrl.startsWith("data:image/")) {
-      return NextResponse.json({ error: "Missing imageDataUrl (expected data:image/... base64 URL)." }, { status: 400 });
+    if (
+      !imageDataUrl ||
+      typeof imageDataUrl !== "string" ||
+      !imageDataUrl.startsWith("data:image/")
+    ) {
+      return NextResponse.json(
+        { error: "Missing or invalid imageDataUrl." },
+        { status: 400 }
+      );
     }
 
     const prompt = `
@@ -79,55 +88,77 @@ You are reading a Google Flights screenshot.
 Extract only what is visible. Do NOT guess.
 
 Return:
-- airline_name, airline_iata if visible
-- flight_number if visible
-- route if visible
-- cabin: business / first / unknown
-- aircraft_type if visible (A350-900, 777-300ER, etc.)
-- cabin_text_found: exact cabin snippet
-- raw_text: short transcription of key parts
-- evidence: bullets of what you saw and where
+- airline_name
+- airline_iata
+- flight_number
+- route
+- cabin (business / first / unknown)
+- aircraft_type
+- cabin_text_found
+- raw_text
+- evidence
 
-Also detect cabin feature wording if visible:
-- "lie-flat" / "lie flat"
-- "suite"
-- "door"
-- "direct aisle access" / "direct-aisle access"
+Also detect cabin wording:
+- lie-flat / lie flat
+- suite
+- door
+- direct aisle access
 
-Set booleans in "markers" accordingly, and copy the exact snippet you saw into "markers_text".
-If not visible, set all booleans false and markers_text as "".
-
-If a field is not visible, return "" (empty string), except cabin can be "unknown".
+Set markers booleans accordingly and copy the exact snippet into markers_text.
+If not visible, set booleans false and markers_text as "".
 `.trim();
 
     const response = await client.responses.create({
       model: MODEL,
-      text: { format: { type: "json_schema", json_schema: extractionSchema } },
+      text: {
+        format: {
+          type: "json_schema",
+          name: "GoogleFlightsExtraction",
+          schema: extractionSchema.schema,
+          strict: true
+        }
+      },
       input: [
         {
           role: "user",
           content: [
-            { type: "text", text: prompt },
-            { type: "input_image", image_url: imageDataUrl }
+            {
+              type: "input_text",
+              text: prompt
+            },
+            {
+              type: "input_image",
+              image_url: imageDataUrl
+            }
           ]
         }
       ]
-    });
+    } as any);
 
-    const jsonText =
+    const outputText =
       (response as any).output_text ||
-      (response as any).output?.find((o: any) => o.type === "message")?.content?.find((c: any) => c.type === "output_text")
-        ?.text;
+      (response as any).output
+        ?.flatMap((item: any) => item.content || [])
+        ?.find((c: any) => c.type === "output_text")?.text;
 
-    if (!jsonText) {
-      return NextResponse.json({ error: "Model returned no extraction JSON." }, { status: 500 });
+    if (!outputText) {
+      return NextResponse.json(
+        { error: "No JSON returned from OpenAI." },
+        { status: 500 }
+      );
     }
 
-    const extracted = JSON.parse(jsonText) as Extracted;
+    const extracted = JSON.parse(outputText) as Extracted;
     const resolved = resolveSeatProduct(extracted);
 
-    return NextResponse.json({ ...extracted, ...resolved });
-  } catch (err: any) {
-    return NextResponse.json({ error: "Classification failed.", detail: err?.message || String(err) }, { status: 500 });
+    return NextResponse.json({
+      ...extracted,
+      ...resolved
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error?.message || "Classification failed" },
+      { status: 500 }
+    );
   }
 }

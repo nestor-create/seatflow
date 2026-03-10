@@ -1,14 +1,13 @@
-// app/layout.tsx
 import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Ascend Cabin Atlas",
-  description: "Paste a Google Flights screenshot to detect premium cabin products and show seat images.",
+  description: "Paste a Google Flights screenshot to detect premium cabin products."
 };
 
 export default function RootLayout({
-  children,
+  children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
