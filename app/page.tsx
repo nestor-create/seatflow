@@ -30,37 +30,6 @@ type ApiResponse = {
   };
 };
 
-function pct(n?: number) {
-  if (typeof n !== "number") return null;
-  return Math.round(Math.max(0, Math.min(1, n)) * 100);
-}
-
-function buildPitch(r: ApiResponse) {
-  const product = r.seat_product?.name || "this cabin";
-
-  const intro =
-    r.status === "confirmed"
-      ? `Great news — this looks like ${product}.`
-      : r.status === "likely"
-      ? `This is likely ${product}, based on the aircraft and cabin details.`
-      : `We need one more detail to confirm the exact seat product.`;
-
-  const bullets =
-    r.status === "needs_more_info"
-      ? [
-          "Open Flight details in Google Flights and include the aircraft type line.",
-          "If available, include wording like lie-flat, suite, or door.",
-          "Once confirmed, we can verify the best seat layout."
-        ]
-      : [
-          "Strong premium cabin option with lie-flat comfort and privacy.",
-          "We’ll verify the operating aircraft to avoid last-minute equipment swaps.",
-          "We can recommend the best rows once the aircraft is confirmed."
-        ];
-
-  return { intro, bullets };
-}
-
 export default function Page() {
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [result, setResult] = useState<ApiResponse | null>(null);
@@ -79,11 +48,12 @@ export default function Page() {
           if (!blob) return;
 
           const reader = new FileReader();
-          reader.onload = () => setImageDataUrl(String(reader.result));
+          reader.onload = () => {
+            setImageDataUrl(String(reader.result));
+            setResult(null);
+            setError("");
+          };
           reader.readAsDataURL(blob);
-
-          setResult(null);
-          setError("");
           return;
         }
       }
@@ -103,11 +73,12 @@ export default function Page() {
     }
 
     const reader = new FileReader();
-    reader.onload = () => setImageDataUrl(String(reader.result));
+    reader.onload = () => {
+      setImageDataUrl(String(reader.result));
+      setResult(null);
+      setError("");
+    };
     reader.readAsDataURL(file);
-
-    setResult(null);
-    setError("");
   };
 
   const classify = async () => {
@@ -120,12 +91,25 @@ export default function Page() {
     try {
       const res = await fetch("/api/classify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify({ imageDataUrl })
       });
 
+      const contentType = res.headers.get("content-type") || "";
+
+      if (!contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`API did not return JSON. Got: ${text.slice(0, 120)}`);
+      }
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Request failed");
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Request failed");
+      }
+
       setResult(data);
     } catch (err: any) {
       setError(err?.message || "Something went wrong");
@@ -141,20 +125,18 @@ export default function Page() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const confidence = pct(result?.confidence);
-
   return (
     <main className="min-h-screen bg-white px-6 py-12 text-gray-900">
       <div className="mx-auto max-w-5xl space-y-8">
         <div>
-          <h1 className="text-3xl font-semibold">Ascend Cabin Atlas</h1>
+          <h1 className="text-4xl font-bold">Ascend Cabin Atlas</h1>
           <p className="mt-2 text-gray-600">
             Paste a Google Flights screenshot and auto-suggest the premium cabin product.
           </p>
         </div>
 
         <div className="rounded-2xl border bg-gray-50 p-5">
-          <h2 className="font-semibold text-sm uppercase tracking-wide text-gray-700">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
             How to use
           </h2>
           <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-gray-700">
@@ -171,6 +153,7 @@ export default function Page() {
             type="file"
             accept="image/*"
             onChange={onUpload}
+            className="block text-sm"
           />
 
           <button
@@ -197,17 +180,12 @@ export default function Page() {
 
         {result && (
           <div className="rounded-2xl border p-6 space-y-4">
-            <div className="flex justify-between items-center">
-              <div className="text-xl font-semibold">
+            <div className="flex items-center justify-between">
+              <div className="text-2xl font-semibold">
                 {result.seat_product?.name || "Unknown"}
               </div>
-              <div className="flex items-center gap-3">
-                <span className="rounded-full border px-3 py-1 text-xs font-semibold">
-                  {result.status.toUpperCase()}
-                </span>
-                <span className="text-sm text-gray-600">
-                  {confidence ?? 0}%
-                </span>
+              <div className="text-sm text-gray-600">
+                {Math.round((result.confidence || 0) * 100)}% confidence
               </div>
             </div>
 
@@ -223,14 +201,7 @@ export default function Page() {
               <div><strong>Route:</strong> {result.route || "—"}</div>
               <div><strong>Aircraft:</strong> {result.aircraft_type || "—"}</div>
               <div><strong>Cabin:</strong> {result.cabin || "—"}</div>
-              <div><strong>Cabin label:</strong> {result.cabin_text_found || "—"}</div>
-            </div>
-
-            <div className="flex flex-wrap gap-2 text-xs">
-              {result.markers?.lie_flat && <span className="rounded-full border px-3 py-1">Lie-flat</span>}
-              {result.markers?.suite && <span className="rounded-full border px-3 py-1">Suite</span>}
-              {result.markers?.door && <span className="rounded-full border px-3 py-1">Door</span>}
-              {result.markers?.direct_aisle_access && <span className="rounded-full border px-3 py-1">Direct aisle access</span>}
+              <div><strong>Cabin Label:</strong> {result.cabin_text_found || "—"}</div>
             </div>
 
             {result.seat_product?.seatmaps_airline_url && (
@@ -245,35 +216,24 @@ export default function Page() {
             )}
 
             {result.seat_product?.image_url ? (
-              <div className="rounded-2xl border overflow-hidden">
+              <div className="overflow-hidden rounded-2xl border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={result.seat_product.image_url} alt="Seat preview" className="w-full" />
+                <img
+                  src={result.seat_product.image_url}
+                  alt={result.seat_product.name}
+                  className="w-full"
+                />
               </div>
             ) : (
               <div className="rounded-xl border bg-gray-50 p-4 text-sm text-gray-600">
                 No seat image configured yet.
               </div>
             )}
-
-            {(() => {
-              const pitch = buildPitch(result);
-              return (
-                <div className="rounded-2xl border p-4">
-                  <div className="font-semibold">Client-ready pitch</div>
-                  <div className="mt-2 text-sm">{pitch.intro}</div>
-                  <ul className="mt-3 list-disc pl-5 text-sm space-y-1">
-                    {pitch.bullets.map((b, i) => (
-                      <li key={i}>{b}</li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })()}
           </div>
         )}
 
         {imageDataUrl && (
-          <div className="rounded-2xl border overflow-hidden">
+          <div className="overflow-hidden rounded-2xl border">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={imageDataUrl} alt="Preview" className="w-full" />
           </div>
