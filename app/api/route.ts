@@ -5,69 +5,21 @@ import type { Extracted } from "../../lib/resolver";
 
 export const runtime = "nodejs";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.2";
-
-const extractionSchema = {
-  name: "GoogleFlightsExtraction",
-  schema: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      airline_name: { type: "string" },
-      airline_iata: { type: "string" },
-      flight_number: { type: "string" },
-      route: { type: "string" },
-      cabin: { type: "string", enum: ["business", "first", "unknown"] },
-      aircraft_type: { type: "string" },
-      cabin_text_found: { type: "string" },
-      raw_text: { type: "string" },
-      markers: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          lie_flat: { type: "boolean" },
-          suite: { type: "boolean" },
-          door: { type: "boolean" },
-          direct_aisle_access: { type: "boolean" }
-        },
-        required: ["lie_flat", "suite", "door", "direct_aisle_access"]
-      },
-      markers_text: { type: "string" },
-      evidence: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            clue: { type: "string" },
-            where: { type: "string" }
-          },
-          required: ["clue", "where"]
-        }
-      }
-    },
-    required: [
-      "airline_name",
-      "airline_iata",
-      "flight_number",
-      "route",
-      "cabin",
-      "aircraft_type",
-      "cabin_text_found",
-      "raw_text",
-      "markers",
-      "markers_text",
-      "evidence"
-    ]
-  }
-} as const;
 
 export async function POST(req: Request) {
   try {
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "OPENAI_API_KEY is missing on the server." },
+        { status: 500 }
+      );
+    }
+
+    const client = new OpenAI({ apiKey });
+
     const body = await req.json();
     const imageDataUrl = body?.imageDataUrl;
 
@@ -81,6 +33,61 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    const extractionSchema = {
+      name: "GoogleFlightsExtraction",
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          airline_name: { type: "string" },
+          airline_iata: { type: "string" },
+          flight_number: { type: "string" },
+          route: { type: "string" },
+          cabin: { type: "string", enum: ["business", "first", "unknown"] },
+          aircraft_type: { type: "string" },
+          cabin_text_found: { type: "string" },
+          raw_text: { type: "string" },
+          markers: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              lie_flat: { type: "boolean" },
+              suite: { type: "boolean" },
+              door: { type: "boolean" },
+              direct_aisle_access: { type: "boolean" }
+            },
+            required: ["lie_flat", "suite", "door", "direct_aisle_access"]
+          },
+          markers_text: { type: "string" },
+          evidence: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                clue: { type: "string" },
+                where: { type: "string" }
+              },
+              required: ["clue", "where"]
+            }
+          }
+        },
+        required: [
+          "airline_name",
+          "airline_iata",
+          "flight_number",
+          "route",
+          "cabin",
+          "aircraft_type",
+          "cabin_text_found",
+          "raw_text",
+          "markers",
+          "markers_text",
+          "evidence"
+        ]
+      }
+    } as const;
 
     const prompt = `
 You are reading a Google Flights screenshot.
@@ -122,14 +129,8 @@ If not visible, set booleans false and markers_text as "".
         {
           role: "user",
           content: [
-            {
-              type: "input_text",
-              text: prompt
-            },
-            {
-              type: "input_image",
-              image_url: imageDataUrl
-            }
+            { type: "input_text", text: prompt },
+            { type: "input_image", image_url: imageDataUrl }
           ]
         }
       ]
