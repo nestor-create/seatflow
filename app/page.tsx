@@ -69,75 +69,74 @@ export default function Page() {
   }, [airlineIata, aircraft, cabin]);
 
   return (
-    <main className="min-h-screen bg-white px-6 py-12 text-gray-900">
-      <div className="mx-auto max-w-6xl space-y-8">
-        <div>
-          <h1 className="text-4xl font-bold">Ascend Cabin Atlas</h1>
-          <p className="mt-2 text-gray-600">
-            Paste a Google Flights screenshot, then choose airline, aircraft, and cabin to show the likely premium seat product.
-          </p>
+    <main className="page">
+      <div className="container">
+        <div className="hero">
+          <h1 className="title">Ascend Cabin Atlas</h1>
+          <div className="subtitle">
+            Paste a Google Flights screenshot, then choose airline, aircraft, and cabin to surface the likely premium seat product.
+          </div>
         </div>
 
-        <div className="rounded-2xl border bg-gray-50 p-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
-            How to use
-          </h2>
-          <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-gray-700">
-            <li>Open the flight in Google Flights</li>
-            <li>Paste the screenshot here with Ctrl+V, or upload it</li>
-            <li>Enter airline code, aircraft, and cabin</li>
-            <li>Open SeatMaps, AeroLOPA, or Google Images from the result</li>
-          </ol>
-        </div>
+        <div className="grid">
+          <section className="card">
+            <h2 className="sectionTitle">Input</h2>
+            <div className="helper">
+              Paste a screenshot with <strong>Ctrl+V</strong>, or upload it manually. Then enter the airline code, aircraft, and cabin.
+            </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl border p-6 space-y-4">
-            <div className="flex flex-wrap items-center gap-4">
+            <ol className="instructions">
+              <li>Open the flight in Google Flights</li>
+              <li>Paste the screenshot here with Ctrl+V, or upload it</li>
+              <li>Enter airline code, aircraft, and cabin</li>
+              <li>Open SeatMaps, AeroLOPA, or Google Images from the result</li>
+            </ol>
+
+            <div className="row" style={{ marginTop: 18 }}>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
                 onChange={onUpload}
               />
-
               <button
+                className="button"
                 onClick={() => {
                   setImageDataUrl(null);
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }}
-                className="rounded-xl border px-4 py-2 text-sm"
               >
                 Clear Image
               </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="formGrid">
               <div>
-                <label className="mb-2 block text-sm font-medium">Airline (IATA)</label>
+                <label className="label">Airline (IATA)</label>
                 <input
+                  className="input"
                   value={airlineIata}
                   onChange={(e) => setAirlineIata(e.target.value.toUpperCase())}
-                  className="w-full rounded-xl border px-3 py-2"
                   placeholder="NH"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium">Aircraft</label>
+                <label className="label">Aircraft</label>
                 <input
+                  className="input"
                   value={aircraft}
                   onChange={(e) => setAircraft(e.target.value.toUpperCase())}
-                  className="w-full rounded-xl border px-3 py-2"
                   placeholder="77W"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium">Cabin</label>
+                <label className="label">Cabin</label>
                 <select
+                  className="select"
                   value={cabin}
                   onChange={(e) => setCabin(e.target.value as CabinType)}
-                  className="w-full rounded-xl border px-3 py-2"
                 >
                   <option value="business">Business</option>
                   <option value="first">First</option>
@@ -145,75 +144,54 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border bg-gray-50">
+            <div className="previewBox">
               {imageDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={imageDataUrl} alt="Screenshot preview" className="w-full" />
+                <img src={imageDataUrl} alt="Screenshot preview" className="previewImage" />
               ) : (
-                <div className="p-8 text-sm text-gray-500">
+                <div className="previewPlaceholder">
                   Paste or upload a screenshot to preview it here.
                 </div>
               )}
             </div>
           </section>
 
-          <section className="rounded-2xl border p-6 space-y-4">
-            <div className="text-xl font-semibold">Suggested cabin product</div>
+          <section className="card">
+            <h2 className="sectionTitle">Suggested cabin product</h2>
 
             {result ? (
               <>
-                <div className="rounded-2xl border p-5">
-                  <div className="text-2xl font-semibold">{result.productName}</div>
-                  <div className="mt-2 text-sm text-gray-600">{result.shortNotes}</div>
-
-                  <div className="mt-4 grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
-                    <div><strong>Airline:</strong> {result.airlineName} ({result.airlineIata})</div>
-                    <div><strong>Cabin:</strong> {result.cabin}</div>
-                    <div><strong>Aircraft match:</strong> {aircraft}</div>
-                    <div><strong>Product:</strong> {result.productName}</div>
+                <div className="resultHeader">
+                  <div>
+                    <h3 className="resultName">{result.productName}</h3>
+                    <div className="resultNotes">{result.shortNotes}</div>
                   </div>
-
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <a
-                      href={result.seatmapsUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-xl border px-4 py-2 text-sm"
-                    >
-                      SeatMaps
-                    </a>
-
-                    <a
-                      href={result.aerolopaUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-xl border px-4 py-2 text-sm"
-                    >
-                      AeroLOPA
-                    </a>
-
-                    <a
-                      href={result.googleImagesUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-xl border px-4 py-2 text-sm"
-                    >
-                      Google Images
-                    </a>
-                  </div>
+                  <div className="badge">{result.cabin.toUpperCase()}</div>
                 </div>
 
-                <div className="rounded-2xl border p-5">
-                  <div className="font-semibold">Suggested image source</div>
-                  <div className="mt-2 text-sm text-gray-600">
-                    Click <strong>Google Images</strong> to open live image results for this cabin product.
-                  </div>
+                <div className="infoGrid">
+                  <div><strong>Airline:</strong> {result.airlineName} ({result.airlineIata})</div>
+                  <div><strong>Aircraft:</strong> {aircraft}</div>
+                  <div><strong>Cabin:</strong> {result.cabin}</div>
+                  <div><strong>Match:</strong> {result.productName}</div>
                 </div>
 
-                <div className="rounded-2xl border p-5">
-                  <div className="font-semibold">Client-ready pitch</div>
-                  <div className="mt-2 text-sm font-medium">{result.pitchTitle}</div>
-                  <ul className="mt-3 list-disc pl-5 text-sm space-y-1 text-gray-700">
+                <div className="links">
+                  <a className="linkButton" href={result.seatmapsUrl} target="_blank" rel="noreferrer">
+                    SeatMaps
+                  </a>
+                  <a className="linkButton" href={result.aerolopaUrl} target="_blank" rel="noreferrer">
+                    AeroLOPA
+                  </a>
+                  <a className="linkButton" href={result.googleImagesUrl} target="_blank" rel="noreferrer">
+                    Google Images
+                  </a>
+                </div>
+
+                <div className="pitch">
+                  <h4 className="pitchTitle">Client-ready pitch</h4>
+                  <p className="pitchLead">{result.pitchTitle}</p>
+                  <ul className="pitchList">
                     {result.pitchBullets.map((bullet, index) => (
                       <li key={index}>{bullet}</li>
                     ))}
@@ -221,7 +199,7 @@ export default function Page() {
                 </div>
               </>
             ) : (
-              <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+              <div className="emptyState">
                 No match found yet. Try a supported airline + aircraft combination from the built-in list.
               </div>
             )}

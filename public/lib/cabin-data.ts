@@ -123,5 +123,41 @@ export const CABIN_PRODUCTS: CabinProduct[] = [
       "One of the most aspirational first class products available.",
       "Ideal for clients seeking a true flagship experience."
     ]
+  },
+  {
+    id: "EK_GAMECHANGER_77W_F",
+    airlineIata: "EK",
+    airlineName: "Emirates",
+    aircraft: ["777-300ER", "77W"],
+    cabin: "first",
+    productName: "Game Changer First Suite",
+    shortNotes: "Emirates’ enclosed first class suite on select 777s.",
+    seatmapsUrl: "https://seatmaps.com/airlines/ek-emirates/",
+    aerolopaUrl: "https://www.aerolopa.com/ek",
+    googleImagesUrl: "https://www.google.com/search?tbm=isch&q=Emirates+Game+Changer+First+Suite",
+    pitchTitle: "Ultra-private enclosed first suite",
+    pitchBullets: [
+      "Exceptional privacy with floor-to-ceiling suite design.",
+      "A standout choice for clients wanting a true first class feel.",
+      "Best to verify aircraft because not all Emirates 777s have this suite."
+    ]
+  },
+  {
+    id: "JL_A35K_J",
+    airlineIata: "JL",
+    airlineName: "Japan Airlines",
+    aircraft: ["A350-1000", "A35K"],
+    cabin: "business",
+    productName: "JAL A350-1000 Business",
+    shortNotes: "Japan Airlines’ newest flagship long-haul business seat.",
+    seatmapsUrl: "https://seatmaps.com/airlines/jl-japan-airlines/",
+    aerolopaUrl: "https://www.aerolopa.com/jl",
+    googleImagesUrl: "https://www.google.com/search?tbm=isch&q=JAL+A350-1000+Business+Class",
+    pitchTitle: "Modern flagship JAL business class",
+    pitchBullets: [
+      "Strong privacy and updated flagship design.",
+      "A compelling premium option on JAL’s newest aircraft.",
+      "Best matched when the A350-1000 is confirmed."
+    ]
   }
 ];
